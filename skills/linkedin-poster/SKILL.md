@@ -55,18 +55,24 @@ ls ~/Hermes/linkedin-agent/drafts/                    # all draft IDs
 cat ~/Hermes/linkedin-agent/drafts/<id>/meta.json     # post text + status + image_path + provider used
 ```
 
-## Model budget (gpt-5-nano with 200/day cap, then openrouter/free)
+## Model chain (Codex subscription → nano → free)
 
-The skill uses **gpt-5-nano direct** by default (~1.7s, cheap). After 200 calls in a UTC day, it auto-falls-back to **openrouter/free** (random free model). Counter resets at UTC midnight.
+The skill tries models in this order (auto mode):
+1. **Codex** (`gpt-5.5-codex` via your ChatGPT subscription, through `hermes proxy`) — free for you, primary path.
+2. **gpt-5-nano** (OpenAI direct API, paid) — fallback if Codex unavailable. Counts toward 200/day cap.
+3. **openrouter/auto** (free random model) — last resort, or when nano cap exhausted.
 
-User chat commands that you should map to script calls:
+Empty completions or HTTP errors automatically advance to the next provider.
+
+User chat commands you should map to script calls:
 
 | User says | Run |
 |---|---|
-| "model status" / "what model" / "model usage" | `~/Hermes/linkedin-agent/venv/bin/python ~/Hermes/linkedin-agent/scripts/llm_budget.py status` |
-| "force gpt-5-nano" / "use nano always" | `... llm_budget.py set gpt-5-nano` |
-| "force free model" / "switch to free" | `... llm_budget.py set free` |
-| "auto model" / "reset model choice" | `... llm_budget.py set auto` |
-| "reset model counter" / "reset budget" | `... llm_budget.py reset` |
+| "model status" / "what model" | `~/Hermes/linkedin-agent/venv/bin/python ~/Hermes/linkedin-agent/scripts/llm_budget.py status` |
+| "force codex" / "use codex" | `... llm_budget.py set codex` |
+| "force nano" | `... llm_budget.py set gpt-5-nano` |
+| "force free" | `... llm_budget.py set free` |
+| "auto model" / "reset choice" | `... llm_budget.py set auto` |
+| "reset budget" / "reset counter" | `... llm_budget.py reset` |
 
 Always show the JSON output to the user so they see what changed.
