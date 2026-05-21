@@ -32,13 +32,18 @@ def _load_token() -> dict:
 
 
 def _is_expired(token_data: dict) -> bool:
-    """True if no expiry recorded or within REFRESH_MARGIN of expiry."""
+    """True if expiry is recorded AND within REFRESH_MARGIN.
+
+    Legacy tokens (no issued_at / expires_at) are treated as valid — we have
+    no way to know when they expire, so we let the LinkedIn API tell us via
+    401 on the next call. Re-run oauth_linkedin.py to upgrade.
+    """
     expires_at = token_data.get("expires_at")
+    issued_at = token_data.get("issued_at")
+    if not expires_at and not issued_at:
+        return False  # legacy token, can't tell — trust it until API says no
     if not expires_at:
-        # Legacy token (no expiry recorded) — assume needs refresh check
-        issued_at = token_data.get("issued_at", 0)
-        expires_in = token_data.get("expires_in", 5184000)  # LinkedIn default 60d
-        expires_at = issued_at + expires_in
+        expires_at = issued_at + token_data.get("expires_in", 5184000)
     return time.time() >= (expires_at - REFRESH_MARGIN_SECONDS)
 
 
