@@ -7,6 +7,7 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 from config import (
     OPENROUTER_API_KEY,
     OPENROUTER_MODEL,
@@ -14,6 +15,7 @@ from config import (
     OPENAI_MODEL,
     draft_dir,
 )
+from llm_budget import call_llm  # noqa: E402
 
 
 def _atomic_write(path: Path, content: str):
@@ -78,11 +80,15 @@ def _openrouter(prompt: str) -> str:
     return result["choices"][0]["message"]["content"]
 
 
+_last_provider = "unknown"
+
+
 def _llm(prompt: str) -> str:
-    """Prefer OpenAI direct (faster) when available; fall back to OpenRouter."""
-    if OPENAI_API_KEY:
-        return _openai_direct(prompt)
-    return _openrouter(prompt)
+    """Budget-aware LLM call. Default: gpt-5-nano. After 200/day: openrouter/free."""
+    global _last_provider
+    text, provider = call_llm(prompt)
+    _last_provider = provider
+    return text
 
 
 def research_agent(user_prompt):
@@ -196,8 +202,7 @@ def generate_draft(user_prompt: str, research: str | None = None) -> dict:
         "timestamp": draft_id,
         "user_prompt": user_prompt,
         "generated_post": post,
-        "model": OPENAI_MODEL if OPENAI_API_KEY else OPENROUTER_MODEL,
-        "provider": "openai-direct" if OPENAI_API_KEY else "openrouter",
+        "provider": _last_provider,
         "review_issues": issues,
         "status": "rejected" if issues else "draft",
         "research_source": "external" if research else "openrouter",

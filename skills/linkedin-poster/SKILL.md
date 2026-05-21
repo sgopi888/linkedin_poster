@@ -52,5 +52,21 @@ Every LinkedIn post MUST be grounded in current web information. The writer mode
 
 ```bash
 ls ~/Hermes/linkedin-agent/drafts/                    # all draft IDs
-cat ~/Hermes/linkedin-agent/drafts/<id>/meta.json     # post text + status + image_path
+cat ~/Hermes/linkedin-agent/drafts/<id>/meta.json     # post text + status + image_path + provider used
 ```
+
+## Model budget (gpt-5-nano with 200/day cap, then openrouter/free)
+
+The skill uses **gpt-5-nano direct** by default (~1.7s, cheap). After 200 calls in a UTC day, it auto-falls-back to **openrouter/free** (random free model). Counter resets at UTC midnight.
+
+User chat commands that you should map to script calls:
+
+| User says | Run |
+|---|---|
+| "model status" / "what model" / "model usage" | `~/Hermes/linkedin-agent/venv/bin/python ~/Hermes/linkedin-agent/scripts/llm_budget.py status` |
+| "force gpt-5-nano" / "use nano always" | `... llm_budget.py set gpt-5-nano` |
+| "force free model" / "switch to free" | `... llm_budget.py set free` |
+| "auto model" / "reset model choice" | `... llm_budget.py set auto` |
+| "reset model counter" / "reset budget" | `... llm_budget.py reset` |
+
+Always show the JSON output to the user so they see what changed.
