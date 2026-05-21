@@ -1,0 +1,9 @@
+venv/
+__pycache__/
+.env
+*.pyc
+.DS_Store
+images/
+drafts/
+data/posts/
+linkedin_token.json
