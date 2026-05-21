@@ -101,7 +101,13 @@ def call_llm(prompt: str) -> tuple[str, str]:
             data = r.json()
             if "choices" not in data:
                 raise RuntimeError(f"{attempt_provider}: {data.get('error', data)}")
-            text = data["choices"][0]["message"]["content"]
+            text = (data["choices"][0]["message"].get("content") or "").strip()
+            if len(text) < 50:
+                # Empty / near-empty completion — gpt-5-nano sometimes does this
+                # on long prompts. Treat as failure so we fall back.
+                raise RuntimeError(
+                    f"{attempt_provider}: empty completion (len={len(text)})"
+                )
             # Only count primary toward budget; fallback is free
             if attempt_provider == "gpt-5-nano":
                 s = _load_state()

@@ -162,7 +162,9 @@ RESEARCH:
 
 
 def writing_agent(user_prompt, research):
-    post = _llm(WRITING_TEMPLATE.format(user_prompt=user_prompt, research=research))
+    # gpt-5-nano can return empty on overly long prompts; cap research at ~2k chars
+    truncated = (research or "")[:2000]
+    post = _llm(WRITING_TEMPLATE.format(user_prompt=user_prompt, research=truncated))
     return clean_linkedin_text(post)
 
 
