@@ -42,11 +42,23 @@ Every LinkedIn post MUST be grounded in current web information. The writer mode
 - ❌ Using `curl` / `python3` / `wget` for research — only `web_search` (it's free via Tavily/SerpAPI, no `tirith` prompts).
 - ❌ Falling back to model knowledge silently. If web_search fails, say so out loud.
 
-## Critical
+## Critical workflow rules — DO NOT VIOLATE
 
-- **NEVER write LinkedIn post text yourself.** Always invoke `run.sh draft`.
-- **NEVER use `excalidraw` / `architecture-diagram` / `generate-image` for LinkedIn images.** This skill generates the image via Comfy Cloud as part of `draft`.
-- **NEVER call `publish` without explicit user approval** of a specific `draft_id`.
+1. **NEVER write LinkedIn post text yourself.** Always invoke `run.sh draft`.
+
+2. **NEVER use `excalidraw` / `architecture-diagram` / `generate-image` for LinkedIn images.** This skill generates the image via Comfy Cloud as part of `draft`.
+
+3. **TWO SEPARATE TURNS for draft and publish.** After `run.sh draft` returns JSON:
+   - Reply to the user with: the post text, the image, and the `draft_id`.
+   - END YOUR REPLY. Do NOT run anything else.
+   - Wait for the user to type literally `publish <draft_id>` or `approve <draft_id>` IN A NEW MESSAGE.
+   - Only THEN invoke `run.sh publish <draft_id>`.
+
+   It is a HARD VIOLATION to call `publish` in the same conversational turn as `draft`. The user has not seen the draft yet at that point. Even if the user originally said "draft and post", you still stop after draft and ask for confirmation.
+
+4. **NEVER publish an old draft_id.** Always publish the draft you just created in the current turn. If multiple drafts exist, ask the user which `draft_id` to publish. Do not assume.
+
+5. **ALWAYS surface the new draft to the user.** The Discord reply for a `draft` command must contain: full post text, image attachment (from `image_path`), and the literal `draft_id` string. Do not collapse, summarize, or skip these.
 
 ## Drafts on disk
 
