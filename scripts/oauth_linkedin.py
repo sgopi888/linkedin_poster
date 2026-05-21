@@ -45,10 +45,19 @@ def callback():
     response = requests.post(token_url, data=data)
 
     print("\n=== TOKEN RESPONSE ===\n")
-    print(response.json())
+    token_data = response.json()
+    print(token_data)
 
-    with open("linkedin_token.json", "w") as f:
-        f.write(response.text)
+    import time as _time
+    token_data["issued_at"] = int(_time.time())
+    token_data["expires_at"] = token_data["issued_at"] + token_data.get(
+        "expires_in", 5184000
+    )
+
+    tmp = "linkedin_token.json.tmp"
+    with open(tmp, "w") as f:
+        json.dump(token_data, f, indent=2)
+    os.replace(tmp, "linkedin_token.json")
 
     return "LinkedIn OAuth success. Token saved."
 

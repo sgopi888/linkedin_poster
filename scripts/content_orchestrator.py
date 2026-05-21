@@ -4,101 +4,55 @@ import sys
 import json
 import requests
 from datetime import datetime
-from dotenv import load_dotenv
+from pathlib import Path
 
-# =========================================
-# LOAD ENV
-# =========================================
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from config import OPENROUTER_API_KEY, OPENROUTER_MODEL, draft_dir
 
-load_dotenv(dotenv_path="/home/sreekanth/Hermes/linkedin-agent/.env")
 
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
-MODEL = os.getenv("OPENROUTER_MODEL")
+def _atomic_write(path: Path, content: str):
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(content)
+    tmp.replace(path)
 
-print("\n=== ACTIVE MODEL ===")
-print(MODEL)
-
-# =========================================
-# USER INPUT
-# =========================================
-
-USER_PROMPT = " ".join(sys.argv[1:])
-
-if not USER_PROMPT:
-    raise Exception("No user prompt provided.")
-
-# =========================================
-# CLEANER
-# =========================================
 
 def clean_linkedin_text(text):
-
-    import re
-
-    # =========================================
-    # REMOVE MARKDOWN BOLD
-    # =========================================
-
     text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
-
-    # =========================================
-    # REMOVE MARKDOWN ITALIC
-    # =========================================
-
     text = re.sub(r"\*(.*?)\*", r"\1", text)
-
-    # =========================================
-    # REMOVE LEAKED INTRO PHRASES
-    # =========================================
-
-    intro_patterns = [
+    for pattern in [
         r"Here.?s your LinkedIn post.*?:",
         r"LinkedIn-ready post.*?:",
         r"crafted to align.*?:",
-    ]
-
-    for pattern in intro_patterns:
+    ]:
         text = re.sub(pattern, "", text, flags=re.IGNORECASE)
-
-    # =========================================
-    # REMOVE --- SEPARATORS
-    # =========================================
-
     text = text.replace("---", "")
-
-    # =========================================
-    # REMOVE META COMMENTARY
-    # =========================================
-
-    commentary_patterns = [
+    for pattern in [
         r"This avoids hype.*",
         r"The pacing and structure.*",
         r"It highlights concrete.*",
-    ]
-
-    for pattern in commentary_patterns:
-        text = re.sub(
-            pattern,
-            "",
-            text,
-            flags=re.IGNORECASE | re.DOTALL
-        )
-
-    # =========================================
-    # NORMALIZE SPACING
-    # =========================================
-
+    ]:
+        text = re.sub(pattern, "", text, flags=re.IGNORECASE | re.DOTALL)
     text = re.sub(r"\n{3,}", "\n\n", text)
-
     return text.strip()
 
-# =========================================
-# RESEARCH AGENT
-# =========================================
+
+def _openrouter(prompt: str) -> str:
+    r = requests.post(
+        "https://openrouter.ai/api/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json={"model": OPENROUTER_MODEL, "messages": [{"role": "user", "content": prompt}]},
+    )
+    result = r.json()
+    if "choices" not in result:
+        raise Exception(f"OpenRouter Error: {result}")
+    return result["choices"][0]["message"]["content"]
+
 
 def research_agent(user_prompt):
-
-    research_prompt = f"""
+    return _openrouter(f"""
 You are an elite AI research analyst.
 
 Research the latest developments related to:
@@ -112,44 +66,10 @@ Return:
 - meaningful insights
 - concise but informative analysis
 - no hallucinations
-"""
+""")
 
-    response = requests.post(
-        "https://openrouter.ai/api/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json"
-        },
-        json={
-            "model": MODEL,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": research_prompt
-                }
-            ]
-        }
-    )
 
-    result = response.json()
-
-    print("\n=== RESEARCH RESPONSE ===\n")
-    print(result)
-
-    if "choices" not in result:
-        raise Exception(f"OpenRouter Error: {result}")
-
-    research = result["choices"][0]["message"]["content"]
-
-    return research
-
-# =========================================
-# WRITING AGENT
-# =========================================
-
-def writing_agent(user_prompt, research):
-
-    writing_prompt = f"""
+WRITING_TEMPLATE = """
 You are a technically credible AI infrastructure founder.
 
 You think deeply about:
@@ -170,86 +90,28 @@ Your writing style is:
 - every paragraph should contain a meaningful insight
 - realistic instead of hype-driven
 
-You write like someone actively building and researching AI systems, not a social media creator.
-
 Write a highly engaging LinkedIn post.
 
 WRITING GOAL:
 The post should make technically literate readers pause and think.
 
-Avoid generic futurism.
-
-Prefer concrete technical implications over abstract predictions.
-
-Do not over-explain obvious concepts.
-
-Assume the audience is not technically intelligent but common to any AI audience - tech and non tech but curious about AI.
+Avoid generic futurism. Prefer concrete technical implications over abstract predictions.
 
 STYLE:
-- intelligent
-- technically grounded
-- visionary but realistic
-- conversational
-- thoughtful
-- concise
-- human sounding
-- readable on mobile
+- intelligent, technically grounded, visionary but realistic
+- conversational, thoughtful, concise, human sounding, readable on mobile
 
 AVOID:
-- markdown
-- clickbait
-- hype language
-- emoji spam
-- sounding AI-generated
-- sounding motivational
-- corporate jargon
+- markdown, clickbait, hype language, emoji spam
+- sounding AI-generated, motivational, or corporate
 
 FORMATTING RULES:
-- short paragraphs
-- clean whitespace
-- use "-" for bullets
-- no numbered lists
-- no markdown syntax
-- no "**"
-- no "*" bullets
-- use at most 3 tasteful hashtags at the very end
-
-GOOD STYLE EXAMPLE:
-
-AI infrastructure is quietly changing.
-
-The bottleneck is no longer compute alone.
-
-Modern systems increasingly depend on:
-- memory bandwidth
-- orchestration
-- distributed coordination
-
-That changes how systems are designed.
-
-END EXAMPLE.
+- short paragraphs, clean whitespace
+- use "-" for bullets, no numbered lists, no markdown syntax
+- at most 3 tasteful hashtags at the end
 
 IMPORTANT:
-Return ONLY the final LinkedIn post.
-
-The user input may include:
-- AI news
-- startup ideas
-- projects
-- GitHub repositories
-- research papers
-- technical thoughts
-- product launches
-- engineering work
-- architecture discussions
-- raw founder notes
-- future predictions
-
-Adapt naturally based on the user request.
-
-Dont include any intro or conclusion like "Here is your linkedin post...", Here’s your LinkedIn post, nOr conclusion like "This avoids hype while..." etc;
-
-INPUT CONTEXT:
+Return ONLY the final LinkedIn post. No intro like "Here is your LinkedIn post" or conclusion commentary.
 
 USER REQUEST:
 {user_prompt}
@@ -258,138 +120,69 @@ RESEARCH:
 {research}
 """
 
-    response = requests.post(
-        "https://openrouter.ai/api/v1/chat/completions",
-        headers={
-            "Authorization": f"Bearer {OPENROUTER_API_KEY}",
-            "Content-Type": "application/json"
-        },
-        json={
-            "model": MODEL,
-            "messages": [
-                {
-                    "role": "user",
-                    "content": writing_prompt
-                }
-            ]
-        }
-    )
 
-    result = response.json()
+def writing_agent(user_prompt, research):
+    post = _openrouter(WRITING_TEMPLATE.format(user_prompt=user_prompt, research=research))
+    return clean_linkedin_text(post)
 
-    print("\n=== WRITING RESPONSE ===\n")
-    print(result)
-
-    if "choices" not in result:
-        raise Exception(f"OpenRouter Error: {result}")
-
-    post = result["choices"][0]["message"]["content"]
-
-    post = clean_linkedin_text(post)
-
-    return post
-
-# =========================================
-# REVIEW AGENT
-# =========================================
 
 def review_agent(post):
-
     issues = []
-
-    banned_words = [
-        "revolutionary",
-        "game-changing",
-        "unprecedented",
-        "disruptive"
-    ]
-
-    for word in banned_words:
+    for word in ["revolutionary", "game-changing", "unprecedented", "disruptive"]:
         if word.lower() in post.lower():
             issues.append(f"Hype term detected: {word}")
-
     if len(post) < 100:
         issues.append("Post too short.")
-
     if len(post) > 3000:
         issues.append("Post too long.")
-
     return issues
 
-# =========================================
-# MAIN ORCHESTRATOR
-# =========================================
 
-print("\n========================")
-print("RESEARCHING...")
-print("========================\n")
+def generate_draft(user_prompt: str) -> dict:
+    """Generate a draft. Returns dict with draft_id, post, issues, post_path, meta_path."""
+    if not user_prompt:
+        raise ValueError("user_prompt is required")
 
-research = research_agent(USER_PROMPT)
+    research = research_agent(user_prompt)
+    post = writing_agent(user_prompt, research)
+    issues = review_agent(post)
 
-print(research)
+    draft_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+    ddir = draft_dir(draft_id)
+    post_path = ddir / "post.txt"
+    _atomic_write(post_path, post)
 
-print("\n========================")
-print("GENERATING POST...")
-print("========================\n")
-
-post = writing_agent(USER_PROMPT, research)
-
-print(post)
-
-print("\n========================")
-print("REVIEWING...")
-print("========================\n")
-
-issues = review_agent(post)
-
-if issues:
-
-    print("POST REJECTED:\n")
-
-    for issue in issues:
-        print("-", issue)
-
-else:
-
-    print("POST APPROVED")
-    # =========================================
-    # SAVE POST
-    # =========================================
-
-    OUTPUT_POST = "/home/sreekanth/Hermes/linkedin-agent/drafts/latest_post.txt"
-
-    with open(OUTPUT_POST, "w") as f:
-        f.write(post)
-
-    print(f"\nSaved post to: {OUTPUT_POST}")
-
-    # =========================================
-    # SAVE METADATA
-    # =========================================
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-    metadata = {
-        "timestamp": timestamp,
-        "user_prompt": USER_PROMPT,
+    meta = {
+        "draft_id": draft_id,
+        "timestamp": draft_id,
+        "user_prompt": user_prompt,
         "generated_post": post,
-        "model": MODEL,
-        "status": "generated"
+        "model": OPENROUTER_MODEL,
+        "review_issues": issues,
+        "status": "rejected" if issues else "draft",
+    }
+    _atomic_write(ddir / "meta.json", json.dumps(meta, indent=2))
+
+    return {
+        "draft_id": draft_id,
+        "post": post,
+        "issues": issues,
+        "post_path": str(post_path),
+        "meta_path": str(ddir / "meta.json"),
+        "status": meta["status"],
     }
 
-    os.makedirs(
-        "/home/sreekanth/Hermes/linkedin-agent/data/posts",
-        exist_ok=True
-    )
 
-    metadata_path = (
-        f"/home/sreekanth/Hermes/linkedin-agent/data/posts/"
-        f"{timestamp}.json"
-    )
-
-    with open(metadata_path, "w") as f:
-        json.dump(metadata, f, indent=2)
-
-    print(f"\nSaved metadata to: {metadata_path}")
-
-print("\nDONE")
+if __name__ == "__main__":
+    user_prompt = " ".join(sys.argv[1:])
+    print(f"\nINPUT:\n{user_prompt}")
+    result = generate_draft(user_prompt)
+    print("\n=== POST ===\n")
+    print(result["post"])
+    if result["issues"]:
+        print("\nISSUES:")
+        for i in result["issues"]:
+            print(" -", i)
+    else:
+        print(f"\nAPPROVED. draft_id={result['draft_id']}")
+    print(f"\nSaved: {result['post_path']}")

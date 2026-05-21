@@ -1,54 +1,25 @@
 import os
+import sys
 import json
 import uuid
 import time
+import re
 import requests
-from dotenv import load_dotenv
+from datetime import datetime
+from pathlib import Path
 
-# =========================================
-# LOAD ENV
-# =========================================
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from config import COMFY_CLOUD_API_KEY, WORKFLOWS_DIR, IMAGES_DIR, draft_dir
 
-load_dotenv(dotenv_path="/home/sreekanth/Hermes/linkedin-agent/.env")
+WORKFLOW_FILE = WORKFLOWS_DIR / "api_wan_text_to_image.json"
 
-COMFY_API_KEY = os.getenv("COMFY_CLOUD_API_KEY")
-
-WORKFLOW_FILE = "/home/sreekanth/Hermes/linkedin-agent/scripts/workflows/api_wan_text_to_image.json"
-
-POST_TEXT_FILE = "drafts/latest_post.txt"
-
-OUTPUT_IMAGE = "drafts/generated_image.png"
-
-# =========================================
-# LOAD POST
-# =========================================
-
-with open(POST_TEXT_FILE, "r") as f:
-    post_text = f.read()
-
-# =========================================
-# LOAD WORKFLOW
-# =========================================
-
-with open(WORKFLOW_FILE, "r") as f:
-    workflow = json.load(f)
-
-# =========================================
-# PROMPT
-# =========================================
-
-PROMPT = f"""
+IMAGE_PROMPT_TEMPLATE = """
 Create a cinematic LinkedIn image.
 
 STYLE:
-- futuristic AI aesthetics
-- premium
-- elegant
-- sophisticated
-- cinematic lighting
-- autonomous AI systems
-- neural memory
-- founder energy
+- futuristic AI aesthetics, premium, elegant, sophisticated
+- cinematic lighting, autonomous AI systems
+- neural memory, founder energy
 - world-class technology company branding
 
 CONTEXT:
@@ -57,163 +28,89 @@ CONTEXT:
 High quality. Professional. Visually striking.
 """
 
-print("\n=== PROMPT ===\n")
-print(PROMPT)
 
-# =========================================
-# FIND PROMPT NODE
-# =========================================
+def generate_image(draft_id: str, poll_interval: int = 5, max_polls: int = 120) -> dict:
+    ddir = draft_dir(draft_id)
+    post_path = ddir / "post.txt"
+    if not post_path.exists():
+        raise FileNotFoundError(f"No post for draft_id={draft_id}")
+    post_text = post_path.read_text()
 
-prompt_node_found = False
+    workflow = json.loads(WORKFLOW_FILE.read_text())
+    prompt = IMAGE_PROMPT_TEMPLATE.format(post_text=post_text)
 
-for node_id, node_data in workflow.items():
+    for node_id, node_data in workflow.items():
+        if node_data.get("class_type") == "WanTextToImageApi":
+            workflow[node_id]["inputs"]["prompt"] = prompt
+            break
+    else:
+        raise Exception("No WanTextToImageApi node found.")
 
-    if (
-        node_data.get("class_type") == "WanTextToImageApi"
-    ):
-
-        workflow[node_id]["inputs"]["prompt"] = PROMPT
-
-        print(f"\nUpdated prompt node: {node_id}")
-
-        prompt_node_found = True
-        break
-
-if not prompt_node_found:
-    raise Exception("No WanTextToImageApi node found.")
-
-
-# =========================================
-# SUBMIT WORKFLOW
-# =========================================
-
-payload = {
-    "prompt": workflow,
-    "client_id": str(uuid.uuid4()),
-    "extra_data": {
-        "api_key_comfy_org": COMFY_API_KEY
+    payload = {
+        "prompt": workflow,
+        "client_id": str(uuid.uuid4()),
+        "extra_data": {"api_key_comfy_org": COMFY_CLOUD_API_KEY},
     }
-}
 
-print("\n=== SUBMITTING WORKFLOW ===\n")
-
-response = requests.post(
-    "https://cloud.comfy.org/api/prompt",
-    headers={
-        "X-API-Key": COMFY_API_KEY,
-        "Content-Type": "application/json"
-    },
-    json=payload
-)
-
-result = response.json()
-
-print(result)
-
-if "prompt_id" not in result:
-    raise Exception(f"Workflow submission failed: {result}")
-
-prompt_id = result["prompt_id"]
-
-print(f"\nPrompt ID: {prompt_id}")
-
-# =========================================
-# POLL FOR RESULT
-# =========================================
-
-history_url = f"https://cloud.comfy.org/api/jobs/{prompt_id}"
-
-print("\n=== WAITING FOR IMAGE ===\n")
-
-image_url = None
-
-for _ in range(60):
-
-    time.sleep(5)
-
-    history_response = requests.get(
-        history_url,
-        headers={
-            "X-API-Key": COMFY_API_KEY
-        }
+    r = requests.post(
+        "https://cloud.comfy.org/api/prompt",
+        headers={"X-API-Key": COMFY_CLOUD_API_KEY, "Content-Type": "application/json"},
+        json=payload,
     )
+    result = r.json()
+    if "prompt_id" not in result:
+        raise Exception(f"Workflow submission failed: {result}")
+    prompt_id = result["prompt_id"]
 
-    history = history_response.json()
+    history_url = f"https://cloud.comfy.org/api/jobs/{prompt_id}"
+    for _ in range(max_polls):
+        time.sleep(poll_interval)
+        history = requests.get(history_url, headers={"X-API-Key": COMFY_CLOUD_API_KEY}).json()
+        if history.get("status") != "completed":
+            continue
 
-    print(history)
+        for node_output in history.get("outputs", {}).values():
+            if "images" not in node_output:
+                continue
+            image_data = node_output["images"][0]
+            filename = image_data["filename"]
+            subfolder = image_data.get("subfolder", "")
+            file_type = image_data.get("type", "output")
+            download_url = (
+                f"https://cloud.comfy.org/api/view?"
+                f"filename={filename}&subfolder={subfolder}&type={file_type}"
+            )
+            img = requests.get(
+                download_url,
+                headers={"X-API-Key": COMFY_CLOUD_API_KEY},
+                allow_redirects=True,
+            )
 
-    if history.get("status") == "completed":
+            IMAGES_DIR.mkdir(parents=True, exist_ok=True)
+            title_snippet = re.sub(r"[^a-zA-Z0-9]+", "_", post_text[:50]).strip("_")
+            archive_path = IMAGES_DIR / f"{draft_id}_{title_snippet}.png"
+            archive_path.write_bytes(img.content)
 
-        outputs = history.get("outputs", {})
+            image_path = ddir / "image.png"
+            image_path.write_bytes(img.content)
 
-        for node_output in outputs.values():
+            meta_path = ddir / "meta.json"
+            if meta_path.exists():
+                meta = json.loads(meta_path.read_text())
+                meta["image_path"] = str(image_path)
+                meta["image_archive"] = str(archive_path)
+                tmp = meta_path.with_suffix(".json.tmp")
+                tmp.write_text(json.dumps(meta, indent=2))
+                tmp.replace(meta_path)
 
-            if "images" in node_output:
+            return {"draft_id": draft_id, "image_path": str(image_path)}
 
-                image_data = node_output["images"][0]
-
-                filename = image_data["filename"]
-                subfolder = image_data.get("subfolder", "")
-                file_type = image_data.get("type", "output")
-
-                print("\n=== IMAGE DATA ===\n")
-                print(image_data)
-
-                download_url = (
-                    f"https://cloud.comfy.org/api/view?"
-                    f"filename={filename}&subfolder={subfolder}&type={file_type}"
-                )
-
-                print("\n=== DOWNLOAD URL ===\n")
-                print(download_url)
-
-                image_response = requests.get(
-                    download_url,
-                    headers={
-                        "X-API-Key": COMFY_API_KEY
-                    },
-                    allow_redirects=True
-                )
-
-                from datetime import datetime
-                import re
-
-                # =========================================
-                # CREATE SAFE FILENAME
-                # =========================================
-
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-
-                title_snippet = re.sub(
-                    r'[^a-zA-Z0-9]+',
-                    '_',
-                    post_text[:50]
-                ).strip("_")
-
-                OUTPUT_IMAGE = (
-                    f"/home/sreekanth/Hermes/linkedin-agent/images/"
-                    f"{timestamp}_{title_snippet}.png"
-                )
-                with open(OUTPUT_IMAGE, "wb") as f:
-                    f.write(image_response.content)
-
-                print(f"\nSaved image to: {OUTPUT_IMAGE}")
-                LATEST_IMAGE_FILE = "/home/sreekanth/Hermes/linkedin-agent/drafts/latest_image.txt"
-
-                with open(LATEST_IMAGE_FILE, "w") as f:
-                    f.write(OUTPUT_IMAGE)
-
-                print(f"\nSaved latest image path to: {LATEST_IMAGE_FILE}")
-
-                image_url = OUTPUT_IMAGE
-
-                break
-                
-    if image_url:
-        break
-
-if not image_url:
     raise Exception("Image generation timed out.")
 
-print("\n=== IMAGE URL ===\n")
-print(image_url)
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: image_agent.py <draft_id>")
+        sys.exit(1)
+    result = generate_image(sys.argv[1])
+    print(f"\nImage: {result['image_path']}")

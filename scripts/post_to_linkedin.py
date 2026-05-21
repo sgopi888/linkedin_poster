@@ -1,157 +1,111 @@
+import sys
 import json
+import time
 import requests
+from pathlib import Path
 
-# =========================================
-# LOAD TOKEN
-# =========================================
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from config import draft_dir
+from linkedin_auth import get_access_token
 
-with open("linkedin_token.json", "r") as f:
-    token_data = json.load(f)
 
-ACCESS_TOKEN = token_data["access_token"]
+def _atomic_write(path: Path, content: str):
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(content)
+    tmp.replace(path)
 
-# =========================================
-# HEADERS
-# =========================================
 
-headers = {
-    "Authorization": f"Bearer {ACCESS_TOKEN}",
-    "X-Restli-Protocol-Version": "2.0.0",
-    "Content-Type": "application/json"
-}
+def publish_draft(draft_id: str) -> dict:
+    ddir = draft_dir(draft_id)
+    post_path = ddir / "post.txt"
+    image_path = ddir / "image.png"
+    meta_path = ddir / "meta.json"
 
-# =========================================
-# LOAD POST TEXT
-# =========================================
+    if not post_path.exists():
+        raise FileNotFoundError(f"No post for draft_id={draft_id}")
 
-POST_FILE = "/home/sreekanth/Hermes/linkedin-agent/drafts/latest_post.txt"
+    post_text = post_path.read_text()
+    has_image = image_path.exists()
 
-with open(POST_FILE, "r") as f:    POST_TEXT = f.read()
-
-# =========================================
-# IMAGE PATH
-# =========================================
-
-LATEST_IMAGE_FILE = "/home/sreekanth/Hermes/linkedin-agent/drafts/latest_image.txt"
-
-with open(LATEST_IMAGE_FILE, "r") as f:
-    IMAGE_PATH = f.read().strip()
-
-print(f"\nUsing image:\n{IMAGE_PATH}")
-# =========================================
-# GET USER INFO
-# =========================================
-
-me_response = requests.get(
-    "https://api.linkedin.com/v2/userinfo",
-    headers=headers
-)
-
-me_data = me_response.json()
-
-print("\n=== USER INFO ===")
-print(me_data)
-
-person_urn = f"urn:li:person:{me_data['sub']}"
-
-# =========================================
-# REGISTER IMAGE UPLOAD
-# =========================================
-
-register_payload = {
-    "registerUploadRequest": {
-        "recipes": [
-            "urn:li:digitalmediaRecipe:feedshare-image"
-        ],
-        "owner": person_urn,
-        "serviceRelationships": [
-            {
-                "relationshipType": "OWNER",
-                "identifier": "urn:li:userGeneratedContent"
-            }
-        ]
+    token = get_access_token()
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "X-Restli-Protocol-Version": "2.0.0",
+        "Content-Type": "application/json",
     }
-}
 
-register_response = requests.post(
-    "https://api.linkedin.com/v2/assets?action=registerUpload",
-    headers=headers,
-    json=register_payload
-)
+    me = requests.get("https://api.linkedin.com/v2/userinfo", headers=headers).json()
+    person_urn = f"urn:li:person:{me['sub']}"
 
-register_data = register_response.json()
+    asset = None
+    if has_image:
+        register = requests.post(
+            "https://api.linkedin.com/v2/assets?action=registerUpload",
+            headers=headers,
+            json={
+                "registerUploadRequest": {
+                    "recipes": ["urn:li:digitalmediaRecipe:feedshare-image"],
+                    "owner": person_urn,
+                    "serviceRelationships": [
+                        {"relationshipType": "OWNER", "identifier": "urn:li:userGeneratedContent"}
+                    ],
+                }
+            },
+        ).json()
+        upload_url = register["value"]["uploadMechanism"][
+            "com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"
+        ]["uploadUrl"]
+        asset = register["value"]["asset"]
+        with open(image_path, "rb") as img:
+            requests.put(
+                upload_url,
+                data=img,
+                headers={"Authorization": f"Bearer {token}", "Content-Type": "image/png"},
+            )
+        time.sleep(5)
 
-print("\n=== REGISTER RESPONSE ===")
-print(register_data)
+    share_content = {
+        "shareCommentary": {"text": post_text},
+        "shareMediaCategory": "IMAGE" if asset else "NONE",
+    }
+    if asset:
+        share_content["media"] = [{
+            "status": "READY",
+            "description": {"text": "AI-generated image"},
+            "media": asset,
+            "title": {"text": "AI Agents"},
+        }]
 
-upload_url = register_data["value"]["uploadMechanism"][
-    "com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"
-]["uploadUrl"]
-
-asset = register_data["value"]["asset"]
-
-# =========================================
-# UPLOAD IMAGE
-# =========================================
-
-with open(IMAGE_PATH, "rb") as img:
-
-    upload_response = requests.put(
-        upload_url,
-        data=img,
-        headers={
-            "Authorization": f"Bearer {ACCESS_TOKEN}",
-            "Content-Type": "image/png"
-        }
+    resp = requests.post(
+        "https://api.linkedin.com/v2/ugcPosts",
+        headers=headers,
+        json={
+            "author": person_urn,
+            "lifecycleState": "PUBLISHED",
+            "specificContent": {"com.linkedin.ugc.ShareContent": share_content},
+            "visibility": {"com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"},
+        },
     )
 
-print(upload_response.text)
+    ok = resp.status_code in (200, 201)
+    if meta_path.exists():
+        meta = json.loads(meta_path.read_text())
+        meta["status"] = "posted" if ok else "post_failed"
+        meta["linkedin_response_status"] = resp.status_code
+        meta["linkedin_response"] = resp.text[:500]
+        _atomic_write(meta_path, json.dumps(meta, indent=2))
 
-print("\n=== IMAGE UPLOAD STATUS ===")
-print(upload_response.status_code)
-
-# =========================================
-# CREATE LINKEDIN POST
-# =========================================
-import time
-
-print("\nWaiting for LinkedIn image processing...")
-time.sleep(5)
-
-post_data = {
-    "author": person_urn,
-    "lifecycleState": "PUBLISHED",
-    "specificContent": {
-        "com.linkedin.ugc.ShareContent": {
-            "shareCommentary": {
-                "text": POST_TEXT
-            },
-            "shareMediaCategory": "IMAGE",
-            "media": [
-                {
-                    "status": "READY",
-                    "description": {
-                        "text": "AI-generated image"
-                    },
-                    "media": asset,
-                    "title": {
-                        "text": "AI Agents"
-                    }
-                }
-            ]
-        }
-    },
-    "visibility": {
-        "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"
+    return {
+        "draft_id": draft_id,
+        "status": "posted" if ok else "post_failed",
+        "http_status": resp.status_code,
+        "response": resp.text,
     }
-}
 
-post_response = requests.post(
-    "https://api.linkedin.com/v2/ugcPosts",
-    headers=headers,
-    json=post_data
-)
 
-print("\n=== POST RESPONSE ===")
-print(post_response.status_code)
-print(post_response.text)
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: post_to_linkedin.py <draft_id>")
+        sys.exit(1)
+    result = publish_draft(sys.argv[1])
+    print(json.dumps(result, indent=2))
