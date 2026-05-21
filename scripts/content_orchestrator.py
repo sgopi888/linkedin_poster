@@ -248,6 +248,12 @@ def generate_draft(user_prompt: str, research: str | None = None) -> dict:
     post_path = ddir / "post.txt"
     _atomic_write(post_path, post)
 
+    # Hard rejection only for issues that genuinely tank a post.
+    # Soft warnings (banned vocab, em-dashes, hashtag count) still let it
+    # through as a draft so the user can review and decide.
+    hard_keywords = ("Post too short", "Post too long", "All-caps hook", "Hook line")
+    hard_failures = [i for i in issues if any(i.startswith(k) for k in hard_keywords)]
+
     meta = {
         "draft_id": draft_id,
         "timestamp": draft_id,
@@ -255,7 +261,7 @@ def generate_draft(user_prompt: str, research: str | None = None) -> dict:
         "generated_post": post,
         "provider": _last_provider,
         "review_issues": issues,
-        "status": "rejected" if issues else "draft",
+        "status": "rejected" if hard_failures else "draft",
         "research_source": "external" if research else "openrouter",
     }
     _atomic_write(ddir / "meta.json", json.dumps(meta, indent=2))
