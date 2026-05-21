@@ -138,12 +138,17 @@ def review_agent(post):
     return issues
 
 
-def generate_draft(user_prompt: str) -> dict:
-    """Generate a draft. Returns dict with draft_id, post, issues, post_path, meta_path."""
+def generate_draft(user_prompt: str, research: str | None = None) -> dict:
+    """Generate a draft. Returns dict with draft_id, post, issues, post_path, meta_path.
+
+    If `research` is provided (e.g., pre-fetched by Hermes' free web tool), skip
+    the paid OpenRouter research call and feed it straight to the writer.
+    """
     if not user_prompt:
         raise ValueError("user_prompt is required")
 
-    research = research_agent(user_prompt)
+    if research is None:
+        research = research_agent(user_prompt)
     post = writing_agent(user_prompt, research)
     issues = review_agent(post)
 
@@ -160,6 +165,7 @@ def generate_draft(user_prompt: str) -> dict:
         "model": OPENROUTER_MODEL,
         "review_issues": issues,
         "status": "rejected" if issues else "draft",
+        "research_source": "external" if research else "openrouter",
     }
     _atomic_write(ddir / "meta.json", json.dumps(meta, indent=2))
 
@@ -176,7 +182,7 @@ def generate_draft(user_prompt: str) -> dict:
 if __name__ == "__main__":
     user_prompt = " ".join(sys.argv[1:])
     print(f"\nINPUT:\n{user_prompt}")
-    result = generate_draft(user_prompt)
+    result = generate_draft(user_prompt, research=None)
     print("\n=== POST ===\n")
     print(result["post"])
     if result["issues"]:

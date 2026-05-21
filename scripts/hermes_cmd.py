@@ -46,7 +46,10 @@ def _save_meta_atomic(draft_id: str, meta: dict):
 
 
 def cmd_draft(args):
-    result = generate_draft(args.topic)
+    research = args.research
+    if args.research_file:
+        research = Path(args.research_file).read_text()
+    result = generate_draft(args.topic, research=research)
     if not args.no_image and not result["issues"]:
         try:
             img = generate_image(result["draft_id"])
@@ -82,6 +85,15 @@ def main():
     sp = sub.add_parser("draft", help="Generate a new draft")
     sp.add_argument("topic")
     sp.add_argument("--no-image", action="store_true")
+    sp.add_argument(
+        "--research",
+        help="Pre-fetched research context (e.g., from Hermes' web tool). "
+        "If omitted, the skill runs its own OpenRouter research call.",
+    )
+    sp.add_argument(
+        "--research-file",
+        help="Path to a file containing research context (alternative to --research for long content).",
+    )
     sp.set_defaults(func=cmd_draft)
 
     sp = sub.add_parser("publish", help="Publish a draft to LinkedIn")
