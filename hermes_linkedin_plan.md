@@ -115,26 +115,42 @@ Confusing.
 - [x] `skills/linkedin-poster/` with per-endpoint docs
 - [x] Drop Maton skill
 
-### Phase 2 — VPS parity + Hermes wiring (NEXT)
-- [ ] SSH to VPS, audit Hermes skill conventions
-- [ ] `git pull` on VPS, smoke-test `hermes_cmd.py draft --no-image`
-- [ ] Register `linkedin-poster` skill with Hermes (format TBD by audit)
-- [ ] End-to-end test: Discord message → Hermes → `hermes_cmd.py draft` → reply with draft preview
-- [ ] Wire `approve <id>` / `reject <id>` Discord text commands to `publish` / `reject`
-- [ ] Delete `discord_bot.py`, `generate_posts_unused.py`, `review_post.py`. Update README.
+### Phase 2 — VPS parity + Hermes wiring (DONE)
+- [x] SSH to VPS, audit Hermes skill conventions (Hermes = NousResearch/hermes-agent at `~/.hermes/`)
+- [x] Skill installed as COPIED files at `~/.hermes/skills/social-media/linkedin/` (symlink rejected by security check)
+- [x] Renamed skill `linkedin-poster` → `linkedin` to win lexical match
+- [x] `scripts/run.sh` launcher (handles cwd + venv detection on Mac `.venv/` and VPS `venv/`)
+- [x] `terminal.backend: local` + `web.search_backend: tavily` in `~/.hermes/config.yaml`
+- [x] Tavily + SerpAPI keys in `~/.hermes/.env`; tirith policy allowlists our APIs
+- [x] End-to-end test: Discord → Hermes → `run.sh draft` → post + image + draft_id ✅
+- [x] Live post #1 published from Discord (mental health, urn:li:share:7463172933637672960)
+- [x] Delete `discord_bot.py`, `generate_posts_unused.py`, `review_post.py`, `run_pipeline.py`
 
-### Phase 3 — Production hardening
-- [ ] `scripts/linkedin_auth.py` with token refresh
-- [ ] Pytest harness, mock the 3 external APIs
-- [ ] Image gen retry + extended polling
-- [ ] Add `--share-type article|article+thumbnail|image|video` (from LinkedIn tutorial transcript)
+### Phase 3 — Production hardening (DONE)
+- [x] `scripts/linkedin_auth.py` with refresh-token grant + atomic writes
+- [x] Atomic `meta.json` / `linkedin_token.json` writes (tmp + rename)
+- [x] `scripts/llm_budget.py` — daily-cap router (gpt-5-nano direct, 200/day → openrouter/auto)
+- [x] OpenAI direct API path (4× faster than OpenRouter route for same nano model)
+- [x] `max_completion_tokens: 8000` (nano is a reasoning model — eats 2-2.5k on hidden reasoning)
+- [x] Empty-response auto-fallback in `call_llm`
+- [x] Embedded 2026 LinkedIn algorithm rules + 6 hook formulas into WRITING_TEMPLATE (was verbose, now uses time-anchor / R.I.P. / contrarian / etc.)
+- [x] Humanizer scrub: em-dashes, curly quotes, 30+ banned vocab words
+- [x] `review_agent` upgraded: hook-length, length sweet spot, hashtag count, banned vocab as soft warnings
+- [x] Soft warnings vs hard rejections (length/hook = hard; vocab/dashes = soft)
+- [x] Hermes brain on `openai-codex` provider, model `gpt-5.5` (free via ChatGPT subscription)
+- [x] Hermes fallback chain: codex → `openai/gpt-5-nano` via OpenRouter → `openrouter/auto`
+- [x] `hermes-discipline` skill: anti-drift memory framework (3-success threshold, protected rules, 30-day expiration sweep)
+- [x] Hard-rule SKILL.md update: draft + publish MUST be separate Discord turns (no chaining)
 
-### Phase 4 — Autonomous mode
-- [ ] Wire `fetch_news.py` with real key + dedup
-- [ ] Add `--from-news` and `--auto` to `hermes_cmd.py draft`
-- [ ] systemd timer on VPS for daily autonomous draft
-- [ ] Optional: Discord buttons instead of text commands
-- [ ] Optional: company-page posting (requires LinkedIn Advertising API approval)
+### Phase 4 — Autonomous mode (TODO)
+- [ ] Cron heartbeat via Hermes' built-in `hermes cron` (not systemd) for daily autonomous drafts
+- [ ] Topic source: wire `fetch_news.py` with real key + dedup against `data/posts/*.json`
+- [ ] Pytest harness for `hermes_cmd.py` JSON contract (prevents Hermes-side breakage on refactor)
+- [ ] Image gen: tenacity retry + extended polling for slow Comfy queues
+- [ ] LinkedIn share types: add `article` / `article+thumbnail` / `video` (default is image now)
+- [ ] Optional: Discord buttons (when Hermes gateway supports them) instead of text commands
+- [ ] Optional: company-page posting (needs LinkedIn Advertising API approval)
+- [ ] OAuth re-mint flow when token returns 401, fully automated (currently semi-automated)
 
 ## Findings from web research (Hermes + openclaw skill ecosystem)
 
@@ -218,39 +234,65 @@ These supersede or refine Phase 2-3 items.
 - [openclaw/skills registry](https://github.com/openclaw/skills) — `arun-8687/linkedin-cli` peer
 - [VoltAgent/awesome-openclaw-skills](https://github.com/VoltAgent/awesome-openclaw-skills) — 5400+ curated skills
 
-## File map (post-refactor)
+## File map (current)
 
 ```
 linkedin_poster/
-├── config.py                       # paths + env, portable
+├── config.py                       # BASE_DIR + env, portable (Mac == VPS)
+├── Makefile                        # install-skill, install-discipline, install-all, init-memories
 ├── requirements.txt
 ├── README.md
 ├── current_pipeline.md             # arch notes
 ├── hermes.md                       # vision doc
 ├── hermes_linkedin_plan.md         # THIS file
+├── hermes_serverimplementation_skill.md  # detailed post-mortem + reusable recipe
 ├── scripts/
-│   ├── .env                        # gitignored — keys
-│   ├── hermes_cmd.py               # ★ single CLI entry for Hermes
-│   ├── content_orchestrator.py     # generate_draft()
-│   ├── image_agent.py              # generate_image(draft_id)
-│   ├── post_to_linkedin.py         # publish_draft(draft_id)
-│   ├── oauth_linkedin.py           # one-time token mint
-│   ├── run_pipeline.py             # backward-compat wrapper
-│   ├── fetch_news.py               # TODO: wire + dedup
+│   ├── .env                        # gitignored — OPENAI_API_KEY, OPENROUTER_API_KEY, COMFY, LinkedIn
+│   ├── run.sh                      # ★ launcher (cd + venv autodetect) — the only entry Hermes calls
+│   ├── hermes_cmd.py               # JSON-in/out CLI (draft / publish / reject)
+│   ├── content_orchestrator.py     # generate_draft() — 2026 algo + hook formulas + humanizer
+│   ├── image_agent.py              # generate_image(draft_id) → Comfy Cloud
+│   ├── post_to_linkedin.py         # publish_draft(draft_id) → LinkedIn v2 API
+│   ├── linkedin_auth.py            # token refresh + atomic writes
+│   ├── llm_budget.py               # provider router: gpt-5-nano (200/day) → openrouter/auto
+│   ├── oauth_linkedin.py           # one-time / on-401 LinkedIn OAuth flow
+│   ├── fetch_news.py               # TODO (Phase 4)
 │   └── workflows/                  # Comfy Cloud JSON
 ├── skills/
-│   └── linkedin-poster/
-│       ├── SKILL.md                # index + setup + invariants
-│       └── endpoints/
-│           ├── draft.md
-│           ├── publish.md
-│           ├── list.md
-│           ├── show.md
-│           └── reject.md
-├── drafts/<id>/                    # gitignored — per-draft files
+│   ├── linkedin-poster/
+│   │   ├── SKILL.md                # hardened: draft/publish separate turns, no auto-publish
+│   │   ├── linkedin-post-writer-1.0.0/  # openclaw reference skill (ideas embedded into our writer)
+│   │   ├── hermes-agent-1.0.0/     # openclaw reference skill (ideas embedded into hermes-discipline)
+│   │   └── hermes-agent-v2-2.1.1/
+│   └── hermes-discipline/
+│       └── SKILL.md                # anti-drift memory loop, protected rules, 30-day expiration
+├── drafts/<id>/                    # gitignored
 │   ├── post.txt
 │   ├── image.png
-│   └── meta.json
-├── data/posts/<id>.json            # gitignored — archive
-└── images/<id>_<slug>.png          # gitignored — image archive
+│   └── meta.json                   # status, provider, review_issues, linkedin_response, ...
+├── data/posts/<id>.json            # gitignored — duplicate archive (dropped in Phase 3)
+└── images/<id>_<slug>.png          # gitignored
+```
+
+## Server-side layout (after `make install-all`)
+
+```
+~/.hermes/
+├── config.yaml                     # model: gpt-5.5 / provider: openai-codex, web.search_backend: tavily, terminal.backend: local
+├── .env                            # TAVILY_API_KEY, SERPAPI_KEY, OPENROUTER_API_KEY
+├── auth.json                       # Codex OAuth token (issued via `hermes auth add openai-codex`)
+├── llm_budget.json                 # daily call counter for skill writer
+├── memories/
+│   ├── MEMORY.md                   # hot rules (≤30 lines), read at session start
+│   ├── REFLECTIONS.md              # chronological lessons (one line each)
+│   ├── PROMOTIONS.md               # candidate patterns awaiting threshold
+│   └── archive/YYYY-MM.md          # cold storage (monthly expiration sweep)
+└── skills/
+    ├── social-media/linkedin/      # real files (cp, not symlink)
+    └── productivity/hermes-discipline/
+
+~/Hermes/linkedin-agent/            # repo cloned from GitHub
+├── venv/                           # Python 3.12 + requirements.txt
+├── linkedin_token.json             # LinkedIn OAuth (with issued_at, expires_at, refresh_token)
+└── drafts/<id>/...
 ```

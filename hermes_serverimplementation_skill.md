@@ -418,7 +418,28 @@ This doesn't restore actual quota — it only clears Hermes' local tracking. If 
 
 ---
 
-## TL;DR — Six rules
+## Workflow discipline (added after Hermes auto-published without approval)
+
+Observed 2026-05-21: Hermes ran `draft` and `publish` in the same Discord turn, posting an OLD draft_id without surfacing the new draft. Caused live LinkedIn post the user didn't approve.
+
+Two-layer fix:
+
+**Layer 1 — SKILL.md hard rules** (loaded every time the skill fires):
+- "TWO SEPARATE TURNS — draft must STOP and wait for `publish <id>` in next message"
+- "NEVER publish an old draft_id" (only publish the draft just created OR one the user explicitly nominates)
+- "ALWAYS surface text + image + draft_id in the draft reply"
+
+**Layer 2 — MEMORY.md** (survives session resets, loaded by `hermes-discipline` skill):
+- Same rules distilled to two memory lines with the date of the violation
+
+**Layer 3 — `hermes-discipline` skill** (governance layer):
+- Protected Rules require explicit typed user approval to modify (the SKILL.md hard rules are in this set)
+- Promotion threshold (3 successes or 2-fix-fails) prevents speculative one-off rules from becoming permanent
+- 30-day expiration sweep prevents memory entropy
+
+This three-layer protection is the right model for any future hard constraint.
+
+## TL;DR — Seven rules
 
 1. **Skill files must be real (cp), not symlinked**, inside `~/.hermes/skills/<category>/<name>/`.
 2. **Description is for discovery — short and keyword-dense**. Behavioral rules go in the body.
@@ -426,3 +447,4 @@ This doesn't restore actual quota — it only clears Hermes' local tracking. If 
 4. **Tavily for web search**: `TAVILY_API_KEY` in `~/.hermes/.env` + `search_backend: tavily` in config.
 5. **gpt-5.5 via openai-codex** for the brain (free with subscription); `max_completion_tokens: 8000` for any nano call.
 6. **One launcher script** at a stable absolute path that handles `cd` + venv detection (`scripts/run.sh`).
+7. **Destructive / irreversible actions go in separate turns.** Hermes will chain tool calls. If a publish, delete, or send is irreversible, the SKILL.md must explicitly require the agent to STOP after the preparatory step and wait for user confirmation in a new message.
