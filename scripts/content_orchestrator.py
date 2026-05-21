@@ -7,7 +7,13 @@ from datetime import datetime
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-from config import OPENROUTER_API_KEY, OPENROUTER_MODEL, draft_dir
+from config import (
+    OPENROUTER_API_KEY,
+    OPENROUTER_MODEL,
+    OPENAI_API_KEY,
+    OPENAI_MODEL,
+    draft_dir,
+)
 
 
 def _atomic_write(path: Path, content: str):
@@ -36,6 +42,26 @@ def clean_linkedin_text(text):
     return text.strip()
 
 
+def _openai_direct(prompt: str) -> str:
+    r = requests.post(
+        "https://api.openai.com/v1/chat/completions",
+        headers={
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": OPENAI_MODEL,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_completion_tokens": 2000,
+        },
+        timeout=60,
+    )
+    result = r.json()
+    if "choices" not in result:
+        raise Exception(f"OpenAI Error: {result}")
+    return result["choices"][0]["message"]["content"]
+
+
 def _openrouter(prompt: str) -> str:
     r = requests.post(
         "https://openrouter.ai/api/v1/chat/completions",
@@ -44,6 +70,7 @@ def _openrouter(prompt: str) -> str:
             "Content-Type": "application/json",
         },
         json={"model": OPENROUTER_MODEL, "messages": [{"role": "user", "content": prompt}]},
+        timeout=60,
     )
     result = r.json()
     if "choices" not in result:
@@ -51,8 +78,15 @@ def _openrouter(prompt: str) -> str:
     return result["choices"][0]["message"]["content"]
 
 
+def _llm(prompt: str) -> str:
+    """Prefer OpenAI direct (faster) when available; fall back to OpenRouter."""
+    if OPENAI_API_KEY:
+        return _openai_direct(prompt)
+    return _openrouter(prompt)
+
+
 def research_agent(user_prompt):
-    return _openrouter(f"""
+    return _llm(f"""
 You are an elite AI research analyst.
 
 Research the latest developments related to:
@@ -122,7 +156,7 @@ RESEARCH:
 
 
 def writing_agent(user_prompt, research):
-    post = _openrouter(WRITING_TEMPLATE.format(user_prompt=user_prompt, research=research))
+    post = _llm(WRITING_TEMPLATE.format(user_prompt=user_prompt, research=research))
     return clean_linkedin_text(post)
 
 
@@ -162,7 +196,8 @@ def generate_draft(user_prompt: str, research: str | None = None) -> dict:
         "timestamp": draft_id,
         "user_prompt": user_prompt,
         "generated_post": post,
-        "model": OPENROUTER_MODEL,
+        "model": OPENAI_MODEL if OPENAI_API_KEY else OPENROUTER_MODEL,
+        "provider": "openai-direct" if OPENAI_API_KEY else "openrouter",
         "review_issues": issues,
         "status": "rejected" if issues else "draft",
         "research_source": "external" if research else "openrouter",
