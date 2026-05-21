@@ -23,14 +23,24 @@ ONE script does everything. Use it for any LinkedIn drafting / posting request.
 
 Each command prints a single JSON object. The `draft` command returns a `draft_id` — always show it to the user so they can later say `publish <id>`.
 
-## Grounding (default: try web search first)
+## Grounding — MANDATORY web search
 
-Before calling `draft`, **try** to use your built-in `web` tool to gather 2-4 recent facts/sources about the topic. If `web` succeeds: bake the findings into the topic string you pass to `draft` (e.g., `draft "agentic memory systems — key 2026 findings: <fact1>; <fact2>; <fact3>"`). If `web` fails (rate limit, timeout, no results), proceed straight to `draft "<topic>"` with no findings — the post will be grounded in the writer model's knowledge instead.
+Every LinkedIn post MUST be grounded in current web information. The writer model's training data is stale; using it alone produces outdated, sometimes incorrect posts.
 
-**Rules**:
-- Spend at most ~15 seconds on web research. If it stalls, move on.
-- Do NOT use `curl` / `python3` ad-hoc — use the built-in `web` tool only (it skips `tirith` security prompts).
-- After `draft`, tell the user explicitly whether the post is web-grounded or knowledge-only ("Web-grounded with 3 sources" vs "From model knowledge — web search timed out").
+**Required workflow**:
+
+1. Call `web_search` with the topic + relevant year ("agentic memory systems 2026").
+2. From the results, pick 3-5 concrete facts (titles, sources, dates, key claims).
+3. Bake them into the topic string for `draft`, e.g.:
+   ```bash
+   ~/Hermes/linkedin-agent/scripts/run.sh draft "agentic memory systems — recent: [Paper X (arxiv 2026): finding 1]; [Company Y launched Z]; [Survey: 40% of agents now use ...]"
+   ```
+4. After `draft`, tell the user the sources you grounded the post in.
+
+**Forbidden**:
+- ❌ Calling `draft "<topic>"` with no grounding facts ever, unless `web_search` errored out AND you told the user "search failed, post is from model knowledge."
+- ❌ Using `curl` / `python3` / `wget` for research — only `web_search` (it's free via Tavily/SerpAPI, no `tirith` prompts).
+- ❌ Falling back to model knowledge silently. If web_search fails, say so out loud.
 
 ## Critical
 
