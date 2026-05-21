@@ -1,6 +1,6 @@
 ---
 name: linkedin-poster
-description: "ALWAYS use this skill for ANY LinkedIn content task. Triggers: 'draft a LinkedIn post', 'write a LinkedIn post', 'post to LinkedIn', 'publish to LinkedIn', 'create LinkedIn content', 'approve <draft_id>', 'reject <draft_id>', 'add image to this draft', or any mention of posting/drafting/publishing on LinkedIn. NEVER generate LinkedIn post text inline yourself — always invoke scripts/hermes_cmd.py to create a tracked draft with a draft_id. NEVER use excalidraw/architecture-diagram/generate-image for LinkedIn images — this skill generates the image via Comfy Cloud as part of the draft command. Self-hosted pipeline: OpenRouter text + Comfy Cloud image + direct LinkedIn v2 API. Returns JSON with draft_id needed for approval flow."
+description: "LinkedIn post drafting + publishing: write LinkedIn post, draft LinkedIn, post to LinkedIn, publish LinkedIn, LinkedIn content, LinkedIn image, LinkedIn article. Generates founder-style post + Comfy Cloud image, saves as reviewable draft, publishes via LinkedIn v2 API on approval. Use for any LinkedIn posting task."
 version: 0.1.0
 author: sgopi888
 license: MIT
