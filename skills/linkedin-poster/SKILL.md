@@ -1,6 +1,6 @@
 ---
 name: linkedin-poster
-description: "Self-hosted LinkedIn drafting + publishing pipeline. Generate founder-style posts with AI image via OpenRouter + Comfy Cloud, store as reviewable drafts, publish on approval through the official LinkedIn v2 API. Single CLI entry point (scripts/hermes_cmd.py) with JSON in/out. Use when the user wants to draft a LinkedIn post, list/show drafts, approve or reject a draft, or publish to LinkedIn. NOT a third-party wrapper — owns its own OAuth and posts directly to api.linkedin.com."
+description: "ALWAYS use this skill for ANY LinkedIn content task. Triggers: 'draft a LinkedIn post', 'write a LinkedIn post', 'post to LinkedIn', 'publish to LinkedIn', 'create LinkedIn content', 'approve <draft_id>', 'reject <draft_id>', 'add image to this draft', or any mention of posting/drafting/publishing on LinkedIn. NEVER generate LinkedIn post text inline yourself — always invoke scripts/hermes_cmd.py to create a tracked draft with a draft_id. NEVER use excalidraw/architecture-diagram/generate-image for LinkedIn images — this skill generates the image via Comfy Cloud as part of the draft command. Self-hosted pipeline: OpenRouter text + Comfy Cloud image + direct LinkedIn v2 API. Returns JSON with draft_id needed for approval flow."
 version: 0.1.0
 author: sgopi888
 license: MIT
@@ -21,6 +21,16 @@ metadata:
 ---
 
 # linkedin-poster — Self-Hosted LinkedIn Pipeline
+
+## Hard rules — read first
+
+1. **For ANY LinkedIn content request, ALWAYS invoke this skill via `scripts/hermes_cmd.py`.** Do not write LinkedIn post text in your reply directly. The user expects a tracked, persisted draft with a `draft_id` so they can review, edit, and publish it. Inline text is unreviewable, unsaved, and breaks the flow.
+
+2. **For images on LinkedIn posts, this skill generates them via Comfy Cloud as part of `draft` (default behavior).** Do NOT invoke `excalidraw`, `architecture-diagram`, `generate-image`, or any other image skill for LinkedIn content. If the user asks to "add an image to this draft," they mean re-run image generation for that draft_id — currently this means re-invoking `draft` (image-only re-run is a future enhancement).
+
+3. **Approval is explicit.** Never call `publish` unless the user said "publish <id>", "post <id>", "approve <id>", or equivalent with a specific `draft_id`.
+
+4. **Always reply with the `draft_id`.** After `draft`, parse the JSON and surface `draft_id` to the user so they can later say "publish <draft_id>".
 
 ## Overview
 
