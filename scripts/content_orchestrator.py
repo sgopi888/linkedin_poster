@@ -24,9 +24,29 @@ def _atomic_write(path: Path, content: str):
     tmp.replace(path)
 
 
+# Humanizer scrub: words/phrases that scream "AI-written". From the
+# linkedin-post-writer skill (kn78vd4zr956q020mrry482ath81gra0).
+_BANNED_VOCAB = [
+    "leverage", "utilize", "facilitate", "streamline", "robust", "seamless",
+    "delve", "navigate", "unlock", "harness", "foster", "cultivate",
+    "fundamentally", "essentially", "ultimately", "crucially", "notably",
+    "landscape", "ecosystem", "paradigm", "realm", "tapestry", "journey",
+    "revolutionary", "game-changing", "unprecedented", "disruptive",
+    "needle-moving", "game-changer", "deep dive",
+]
+
+_BANNED_PHRASES = [
+    r"in today.?s fast-paced world",
+    r"it.?s not just .*?,? it.?s",
+    r"at the end of the day",
+]
+
+
 def clean_linkedin_text(text):
+    # markdown bold/italic
     text = re.sub(r"\*\*(.*?)\*\*", r"\1", text)
     text = re.sub(r"\*(.*?)\*", r"\1", text)
+    # leaked intros
     for pattern in [
         r"Here.?s your LinkedIn post.*?:",
         r"LinkedIn-ready post.*?:",
@@ -34,14 +54,31 @@ def clean_linkedin_text(text):
     ]:
         text = re.sub(pattern, "", text, flags=re.IGNORECASE)
     text = text.replace("---", "")
+    # leaked outros
     for pattern in [
         r"This avoids hype.*",
         r"The pacing and structure.*",
         r"It highlights concrete.*",
     ]:
         text = re.sub(pattern, "", text, flags=re.IGNORECASE | re.DOTALL)
+    # em + en dashes → period or hyphen
+    text = text.replace("—", ". ").replace("–", "-")
+    # curly quotes → straight
+    text = text.replace("“", '"').replace("”", '"')
+    text = text.replace("‘", "'").replace("’", "'")
+    # banned phrases
+    for pat in _BANNED_PHRASES:
+        text = re.sub(pat, "", text, flags=re.IGNORECASE)
+    # collapse whitespace
     text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r" {2,}", " ", text)
     return text.strip()
+
+
+def banned_vocab_hits(text: str) -> list[str]:
+    """Return banned vocab words found in text (for review_agent issues)."""
+    low = text.lower()
+    return [w for w in _BANNED_VOCAB if re.search(rf"\b{re.escape(w)}\b", low)]
 
 
 def _openai_direct(prompt: str) -> str:
@@ -109,54 +146,41 @@ Return:
 """)
 
 
-WRITING_TEMPLATE = """
-You are a technically credible AI infrastructure founder.
+WRITING_TEMPLATE = """\
+Write ONE LinkedIn post. Output the post text ONLY. No intro. No outro. No commentary.
 
-You think deeply about:
-- agentic systems
-- AI infrastructure
-- long-term technological shifts
-- memory systems
-- human-AI interaction
-- scalable intelligence architectures
+VOICE
+A technically credible AI infrastructure founder. Calm, specific, systems-oriented. Realistic, not hype-driven. Every paragraph carries a concrete insight.
 
-Your writing style is:
-- thoughtful
-- calm
-- systems-oriented
-- technically grounded
-- intellectually curious
-- avoid unnecessary words
-- every paragraph should contain a meaningful insight
-- realistic instead of hype-driven
+2026 ALGORITHM RULES (these are non-negotiable)
+- First line is the hook. Earn the "...see more" click in <=210 characters.
+- Total length: 900-1,300 characters. Aim for the middle.
+- Short paragraphs. Double line-break between ideas.
+- 0-2 hashtags MAX, at the very end. Niche hashtags only. No more.
+- No external URLs in the body.
+- Hook → tension → 2-4 concrete points → reframe → close. No rule-of-three theatre.
 
-Write a highly engaging LinkedIn post.
+PICK ONE HOOK FORMAT (do not name it in the output)
+- Platform-risk anaphora: "[Platform] can [throttle] you. [Other platform] can [bad thing]." Stack 3-5 lines, then the reframe.
+- R.I.P. category obituary: "R.I.P. [old thing]. Cause of death: [specific mechanism + number]."
+- Time-anchor confession: "[N] months ago, I stopped [behavior]. Here is what happened."
+- Year-over-year pivot: "In [last year], I [humble]. In [this year], I [transformational]. Here is what actually changed."
+- Contrarian + historical receipts: "[Common belief] is wrong. The [decade ago] version of this story proves it."
+- Curiosity-gap teaser: "[Surprising specific observation]. Here is what nobody is saying."
 
-WRITING GOAL:
-The post should make technically literate readers pause and think.
+HARD CONSTRAINTS
+- NEVER use em-dashes (—) or en-dashes (–). Use periods or hyphens.
+- Vary sentence length aggressively. Mix 3-word sentences with 20-word sentences.
+- Include at least one specific number, named entity, or concrete detail.
+- One concrete vulnerability or real stake. Pure insight posts do not land in 2026.
+- BANNED words (do not use): leverage, utilize, facilitate, streamline, robust, seamless, delve, navigate, unlock, harness, foster, cultivate, fundamentally, essentially, ultimately, crucially, notably, landscape, ecosystem, paradigm, realm, tapestry, journey, revolutionary, game-changing, unprecedented, disruptive, deep dive, game-changer, needle-moving.
+- BANNED openers: "In today's fast-paced world", "It's not just X, it's Y", anything in all caps.
+- No markdown. No "**bold**". No "*italic*". No ---.
 
-Avoid generic futurism. Prefer concrete technical implications over abstract predictions.
-
-STYLE:
-- intelligent, technically grounded, visionary but realistic
-- conversational, thoughtful, concise, human sounding, readable on mobile
-
-AVOID:
-- markdown, clickbait, hype language, emoji spam
-- sounding AI-generated, motivational, or corporate
-
-FORMATTING RULES:
-- short paragraphs, clean whitespace
-- use "-" for bullets, no numbered lists, no markdown syntax
-- at most 3 tasteful hashtags at the end
-
-IMPORTANT:
-Return ONLY the final LinkedIn post. No intro like "Here is your LinkedIn post" or conclusion commentary.
-
-USER REQUEST:
+TOPIC
 {user_prompt}
 
-RESEARCH:
+RESEARCH (use specific facts, dates, names, numbers from this)
 {research}
 """
 
@@ -167,14 +191,41 @@ def writing_agent(user_prompt, research):
 
 
 def review_agent(post):
+    """Check post against 2026 LinkedIn algorithm + humanizer rules.
+
+    Returns soft warnings, not hard rejections. The writer's already
+    constrained by WRITING_TEMPLATE; this is the safety net.
+    """
     issues = []
-    for word in ["revolutionary", "game-changing", "unprecedented", "disruptive"]:
-        if word.lower() in post.lower():
-            issues.append(f"Hype term detected: {word}")
-    if len(post) < 100:
-        issues.append("Post too short.")
-    if len(post) > 3000:
-        issues.append("Post too long.")
+    n = len(post)
+
+    # Length: 900-1300 sweet spot. <400 / >1900 are real penalties.
+    if n < 400:
+        issues.append(f"Post too short ({n} chars; sweet spot 900-1300).")
+    elif n > 1900:
+        issues.append(f"Post too long ({n} chars; sweet spot 900-1300).")
+
+    # Hook: first 210 chars must earn the "...see more" click
+    first_line = post.split("\n", 1)[0]
+    if len(first_line) > 210:
+        issues.append(f"Hook line {len(first_line)} chars > 210 mobile cutoff.")
+    if first_line.isupper():
+        issues.append("All-caps hook — penalized.")
+
+    # Em-dashes should be gone after clean_linkedin_text; if any survive, flag
+    if "—" in post or "–" in post:
+        issues.append("Em-dash or en-dash present (penalty signal).")
+
+    # Banned vocab
+    hits = banned_vocab_hits(post)
+    if hits:
+        issues.append(f"Banned vocab present: {', '.join(hits)}.")
+
+    # Hashtags: 0-2 is current 2026 sweet spot; 5+ looks spammy
+    hashtags = re.findall(r"#\w+", post)
+    if len(hashtags) > 3:
+        issues.append(f"{len(hashtags)} hashtags (>3); 0-2 is the 2026 sweet spot.")
+
     return issues
 
 
