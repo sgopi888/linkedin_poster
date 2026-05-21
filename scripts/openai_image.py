@@ -17,15 +17,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import OPENAI_API_KEY, OPENAI_IMAGE_MODEL, IMAGES_DIR, draft_dir
 
 
-STAT_CARD_PROMPT_TEMPLATE = """A clean editorial graphic with three text elements rendered as designed typography.
+STAT_CARD_PROMPT_TEMPLATE = """A bold news-ticker style editorial graphic, 1024x1024.
 
-Composition:
-- Dark gradient background, deep navy fading to graphite, with subtle dot texture
-- At the top, a bold sans-serif title: "{headline}"
-- In the center, a very large number in a bright accent color: "{big_number}"
-- At the bottom, small italic source caption: "{caption}"
+Three text elements rendered as designed typography:
+- Top: short bold headline in white sans-serif, 3 to 6 words max: "{headline}"
+- Center: huge accent-colored number, dominant visual element: "{big_number}"
+- Bottom: small italic gray caption with source: "{caption}"
 
-Style: minimalist modern editorial design, similar to a magazine chart card. Clean typography. Lots of whitespace. Abstract geometric shapes only. No people, no faces, no recognizable buildings or brand marks. No additional text beyond the three strings shown."""
+Layout: news-ticker / Bloomberg-card feel. Dark gradient background (deep navy to graphite). Subtle dot or grid texture. Lots of negative space. Abstract geometric accent shapes only (no people, no faces, no recognizable buildings or logos). Crisp typography hierarchy. No additional text beyond the three strings provided."""
 
 
 def generate_image_openai(
