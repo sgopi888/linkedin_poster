@@ -1,7 +1,7 @@
 ---
-name: linkedin-poster
-description: "LinkedIn post drafting + publishing: write LinkedIn post, draft LinkedIn, post to LinkedIn, publish LinkedIn, LinkedIn content, LinkedIn image. Generates founder-style post + Comfy Cloud image, saves draft with draft_id, publishes via LinkedIn v2 API on approval."
-version: 0.3.0
+name: linkedin
+description: "LinkedIn post drafting + publishing (self-hosted, your OAuth, your Comfy Cloud image). Triggers on: draft LinkedIn, write LinkedIn, post to LinkedIn, publish LinkedIn, LinkedIn content, LinkedIn image, LinkedIn article. Generates founder-style post + image, saves draft with draft_id, publishes via LinkedIn v2 API on explicit user approval."
+version: 0.4.0
 author: sgopi888
 license: MIT
 platforms: [linux, macos]
