@@ -50,12 +50,32 @@ def cmd_draft(args):
     if args.research_file:
         research = Path(args.research_file).read_text()
     result = generate_draft(args.topic, research=research)
-    if not args.no_image and not result["issues"]:
-        try:
-            img = generate_image(result["draft_id"])
-            result["image_path"] = img["image_path"]
-        except Exception as e:
-            result["image_error"] = str(e)
+    if not args.no_image:
+        # Default: gpt-image-1 stat card if topic looks stat-rich, else comfy mood.
+        # Hermes can override with --image=comfy or --image=gpt-image and stat fields.
+        backend = args.image
+        if backend == "gpt-image":
+            from openai_image import generate_image_openai
+            try:
+                img = generate_image_openai(
+                    result["draft_id"],
+                    headline=args.headline or args.topic[:60],
+                    big_number=args.big_number or "",
+                    caption=args.caption or "",
+                )
+                result["image_path"] = img["image_path"]
+                result["image_backend"] = "gpt-image-1"
+            except Exception as e:
+                result["image_error_gpt"] = str(e)
+                # fall back to comfy
+                backend = "comfy"
+        if backend == "comfy":
+            try:
+                img = generate_image(result["draft_id"])
+                result["image_path"] = img["image_path"]
+                result["image_backend"] = "comfy"
+            except Exception as e:
+                result["image_error"] = str(e)
     _emit(result)
 
 
@@ -78,6 +98,35 @@ def cmd_reject(args):
     _emit({"draft_id": args.draft_id, "status": "rejected"})
 
 
+def cmd_regen_image(args):
+    """Regenerate ONLY the image for an existing draft. No retrying the whole pipeline.
+
+    Backends:
+      comfy (default)    — mood / atmospheric image via Comfy Cloud (~30-60s)
+      gpt-image          — editorial stat card via OpenAI gpt-image-1 (~15s, $0.04)
+                           Requires --headline, --big-number, --caption.
+    """
+    _load_meta(args.draft_id)
+    if args.backend == "gpt-image":
+        from openai_image import generate_image_openai
+        if not (args.headline and args.big_number and args.caption):
+            _emit({"error": "gpt-image backend requires --headline, --big-number, --caption"}, 1)
+        img = generate_image_openai(
+            args.draft_id,
+            headline=args.headline,
+            big_number=args.big_number,
+            caption=args.caption,
+        )
+    else:
+        img = generate_image(args.draft_id)
+    _emit({
+        "draft_id": args.draft_id,
+        "image_path": img["image_path"],
+        "backend": img.get("provider", "comfy"),
+        "regenerated": True,
+    })
+
+
 def main():
     p = argparse.ArgumentParser(prog="hermes_cmd")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -86,9 +135,18 @@ def main():
     sp.add_argument("topic")
     sp.add_argument("--no-image", action="store_true")
     sp.add_argument(
+        "--image",
+        choices=["gpt-image", "comfy"],
+        default="gpt-image",
+        help="Image backend. gpt-image (default): OpenAI stat card with accurate text. "
+        "comfy: WAN mood image, no text.",
+    )
+    sp.add_argument("--headline", help="(gpt-image) headline at top of card; defaults to topic")
+    sp.add_argument("--big-number", help="(gpt-image) hero stat in center, e.g. '$45B'")
+    sp.add_argument("--caption", help="(gpt-image) source caption at bottom, e.g. 'Reuters, May 2026'")
+    sp.add_argument(
         "--research",
-        help="Pre-fetched research context (e.g., from Hermes' web tool). "
-        "If omitted, the skill runs its own OpenRouter research call.",
+        help="Pre-fetched research context (e.g., from Hermes' web tool).",
     )
     sp.add_argument(
         "--research-file",
@@ -104,6 +162,19 @@ def main():
     sp = sub.add_parser("reject", help="Mark a draft as rejected")
     sp.add_argument("draft_id")
     sp.set_defaults(func=cmd_reject)
+
+    sp = sub.add_parser("regen-image", help="Regenerate image for an existing draft")
+    sp.add_argument("draft_id")
+    sp.add_argument(
+        "--backend",
+        choices=["gpt-image", "comfy"],
+        default="gpt-image",
+        help="Image backend. gpt-image (default): stat card with text. comfy: mood image.",
+    )
+    sp.add_argument("--headline", help="(gpt-image) headline text")
+    sp.add_argument("--big-number", help="(gpt-image) hero stat e.g. '$45B'")
+    sp.add_argument("--caption", help="(gpt-image) source caption")
+    sp.set_defaults(func=cmd_regen_image)
 
     args = p.parse_args()
     try:

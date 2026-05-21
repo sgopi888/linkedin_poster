@@ -14,18 +14,19 @@ from config import COMFY_CLOUD_API_KEY, WORKFLOWS_DIR, IMAGES_DIR, draft_dir
 WORKFLOW_FILE = WORKFLOWS_DIR / "api_wan_text_to_image.json"
 
 IMAGE_PROMPT_TEMPLATE = """
-Create a cinematic LinkedIn image.
+Create a cinematic LinkedIn image. ABSOLUTELY NO TEXT, NO WORDS, NO LETTERS, NO NUMBERS, NO STATS, NO HASHTAGS in the image. Pure visual mood only.
 
 STYLE:
 - futuristic AI aesthetics, premium, elegant, sophisticated
-- cinematic lighting, autonomous AI systems
-- neural memory, founder energy
-- world-class technology company branding
+- cinematic lighting, depth of field
+- abstract or scene-based visual metaphor for the topic
+- world-class technology company branding aesthetic
+- minimalist composition
 
-CONTEXT:
+MOOD INSPIRATION (do NOT depict literally, do NOT render any text):
 {post_text}
 
-High quality. Professional. Visually striking.
+High quality. Professional. Visually striking. Photographic or cinematic render. ZERO text overlays. ZERO captions. ZERO labels.
 """
 
 

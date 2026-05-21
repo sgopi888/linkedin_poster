@@ -171,7 +171,8 @@ PICK ONE HOOK FORMAT (do not name it in the output)
 HARD CONSTRAINTS
 - NEVER use em-dashes (—) or en-dashes (–). Use periods or hyphens.
 - Vary sentence length aggressively. Mix 3-word sentences with 20-word sentences.
-- Include at least one specific number, named entity, or concrete detail.
+- Include AT LEAST 3 specific numbers, percentages, or dated stats from the RESEARCH section. Attribute each one inline (e.g. "Brown University, Oct 2025"). Numbers without source attribution are not enough.
+- At least one named entity (company, person, paper, agency) per 100 words.
 - One concrete vulnerability or real stake. Pure insight posts do not land in 2026.
 - BANNED words (do not use): leverage, utilize, facilitate, streamline, robust, seamless, delve, navigate, unlock, harness, foster, cultivate, fundamentally, essentially, ultimately, crucially, notably, landscape, ecosystem, paradigm, realm, tapestry, journey, revolutionary, game-changing, unprecedented, disruptive, deep dive, game-changer, needle-moving.
 - BANNED openers: "In today's fast-paced world", "It's not just X, it's Y", anything in all caps.
@@ -225,6 +226,13 @@ def review_agent(post):
     hashtags = re.findall(r"#\w+", post)
     if len(hashtags) > 3:
         issues.append(f"{len(hashtags)} hashtags (>3); 0-2 is the 2026 sweet spot.")
+
+    # Stat density: require >=3 numeric facts (matches 12%, $5B, 2026, "9 months", etc.)
+    # Avoid counting hashtag-internal digits.
+    stripped = re.sub(r"#\w+", "", post)
+    numbers = re.findall(r"\b\d+(?:[.,]\d+)?%?\b|\$\d[\d,.]*[BMK]?", stripped)
+    if len(numbers) < 3:
+        issues.append(f"Only {len(numbers)} stats; aim for >=3 specific numbers with source attribution.")
 
     return issues
 
