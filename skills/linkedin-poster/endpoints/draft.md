@@ -5,7 +5,7 @@ Generates a founder-style post via OpenRouter, runs a hype-word/length review, a
 ## Command
 
 ```bash
-.venv/bin/python scripts/hermes_cmd.py draft "<topic>" [--no-image]
+~/Hermes/linkedin-agent/scripts/run.sh draft "<topic>" [--no-image]
 ```
 
 - `<topic>` — required. Free-text topic. Wrap in quotes.

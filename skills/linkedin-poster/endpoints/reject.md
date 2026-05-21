@@ -5,7 +5,7 @@ Soft-delete: the files stay on disk, but `meta.json.status` is set to `rejected`
 ## Command
 
 ```bash
-.venv/bin/python scripts/hermes_cmd.py reject <draft_id>
+~/Hermes/linkedin-agent/scripts/run.sh reject <draft_id>
 ```
 
 ## Response

@@ -5,7 +5,7 @@ Reads `drafts/<draft_id>/post.txt` and (if present) `image.png`, uploads to Link
 ## Command
 
 ```bash
-.venv/bin/python scripts/hermes_cmd.py publish <draft_id> [--force]
+~/Hermes/linkedin-agent/scripts/run.sh publish <draft_id> [--force]
 ```
 
 - `<draft_id>` — required. Format `YYYYMMDD_HHMMSS`. Use `list` to find it.
