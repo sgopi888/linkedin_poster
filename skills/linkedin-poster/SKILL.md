@@ -65,7 +65,9 @@ Every LinkedIn post MUST be grounded in current web information. The writer mode
 
 1. **NEVER write LinkedIn post text yourself.** Always invoke `run.sh draft`.
 
-2. **NEVER use `excalidraw` / `architecture-diagram` / `generate-image` for LinkedIn images.** This skill generates the image via Comfy Cloud as part of `draft`.
+2. **NEVER use `excalidraw` / `architecture-diagram` / `generate-image` / `image_generate` (any other image tool) for LinkedIn images.** This skill owns image generation. Backends are `gpt-image-1` (primary) and `comfy` (fallback) — both AI. If both fail, surface the failure to the user. DO NOT improvise.
+
+2b. **NEVER draw, render, or composite images with PIL / Pillow / ImageMagick / cairo / any Python or shell image library.** No text overlays, no caption layers, no manual rendering. Images come from the AI backends only. If text on the image is wrong, regenerate with a better prompt — do NOT paint over the result. If both AI backends fail, tell the user "both AI image backends failed" and stop. Do not write or install any image-drawing libraries.
 
 3. **TWO SEPARATE TURNS for draft and publish.** After `run.sh draft` returns JSON:
    - Reply to the user with: the post text, the image, and the `draft_id`.

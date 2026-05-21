@@ -51,14 +51,16 @@ def cmd_draft(args):
         research = Path(args.research_file).read_text()
     result = generate_draft(args.topic, research=research)
     if not args.no_image:
-        # Default: gpt-image-1 stat card if topic looks stat-rich, else comfy mood.
-        # Hermes can override with --image=comfy or --image=gpt-image and stat fields.
+        # AI-only image chain: gpt-image-1 (primary) → comfy (fallback).
+        # NEVER use PIL or any Python-drawn image. If both AI backends fail,
+        # surface the error to the user — do not fake an image.
         backend = args.image
+        draft_id = result["draft_id"]
         if backend == "gpt-image":
             from openai_image import generate_image_openai
             try:
                 img = generate_image_openai(
-                    result["draft_id"],
+                    draft_id,
                     headline=args.headline or args.topic[:60],
                     big_number=args.big_number or "",
                     caption=args.caption or "",
@@ -67,15 +69,16 @@ def cmd_draft(args):
                 result["image_backend"] = "gpt-image-1"
             except Exception as e:
                 result["image_error_gpt"] = str(e)
-                # fall back to comfy
                 backend = "comfy"
         if backend == "comfy":
             try:
-                img = generate_image(result["draft_id"])
+                img = generate_image(draft_id)
                 result["image_path"] = img["image_path"]
                 result["image_backend"] = "comfy"
             except Exception as e:
-                result["image_error"] = str(e)
+                result["image_error_comfy"] = str(e)
+        if "image_path" not in result:
+            result["image_error"] = "Both gpt-image and comfy failed — see image_error_gpt / image_error_comfy. Do not fall back to non-AI image generation."
     _emit(result)
 
 
