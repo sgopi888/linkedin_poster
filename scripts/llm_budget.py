@@ -22,24 +22,18 @@ BUDGET_FILE = Path(os.path.expanduser("~/.hermes/llm_budget.json"))
 DAILY_CAP = 200
 
 PROVIDERS = {
-    # Codex via your ChatGPT subscription, exposed locally by `hermes proxy`.
-    # No per-token cost; uses your OAuth login. Reasoning model — needs large
-    # max_completion_tokens because gpt-5.5-codex spends most of its budget on
-    # reasoning before emitting visible content.
-    "codex": {
-        "endpoint": os.getenv("CODEX_PROXY_URL", "http://127.0.0.1:8765/v1/chat/completions"),
-        "auth_env": "CODEX_PROXY_KEY",  # any string; hermes proxy doesn't check it
-        "model": os.getenv("CODEX_MODEL", "gpt-5.5-codex"),
-        "extra_body": {"max_completion_tokens": 8000},
-    },
-    # Pay-per-token OpenAI direct — only used if CODEX_PROXY_URL unreachable.
+    # Primary: OpenAI direct gpt-5-nano (fast, paid). Hermes' brain uses Codex
+    # via subscription; this skill's writer uses paid nano because hermes proxy
+    # doesn't support the codex upstream (only Nous Portal).
+    # 8000 max_completion_tokens because nano is a reasoning model that spends
+    # ~2000-2500 tokens reasoning before emitting visible content.
     "gpt-5-nano": {
         "endpoint": "https://api.openai.com/v1/chat/completions",
         "auth_env": "OPENAI_API_KEY",
         "model": "gpt-5-nano",
         "extra_body": {"max_completion_tokens": 8000},
     },
-    # Last resort: free random model on OpenRouter.
+    # Fallback: free random model on OpenRouter (after 200/day or on errors).
     "free": {
         "endpoint": "https://openrouter.ai/api/v1/chat/completions",
         "auth_env": "OPENROUTER_API_KEY",
@@ -48,8 +42,8 @@ PROVIDERS = {
     },
 }
 
-# Default fallback chain: try Codex first, then nano, then free.
-DEFAULT_CHAIN = ["codex", "gpt-5-nano", "free"]
+# Default fallback chain.
+DEFAULT_CHAIN = ["gpt-5-nano", "free"]
 
 
 def _today_utc() -> str:
@@ -79,16 +73,12 @@ def pick_chain() -> list[str]:
     """Return the ordered fallback chain to try."""
     s = _load_state()
     override = s.get("override", "auto")
-    # Manual pin to one provider — single-element chain
     if override in PROVIDERS:
         return [override]
-    # Auto mode — try Codex first (free via subscription), then nano (paid),
-    # then free OpenRouter. Skip nano if daily budget is exhausted.
-    chain = ["codex"]
-    if s["calls_today"] < DAILY_CAP:
-        chain.append("gpt-5-nano")
-    chain.append("free")
-    return chain
+    # Auto: paid nano until daily cap, then free.
+    if s["calls_today"] >= DAILY_CAP:
+        return ["free"]
+    return ["gpt-5-nano", "free"]
 
 
 # Backwards-compat: external callers may still ask for a single provider
@@ -108,8 +98,8 @@ def call_llm(prompt: str) -> tuple[str, str]:
     last_err = None
     for attempt in chain:
         cfg = PROVIDERS[attempt]
-        key = os.getenv(cfg["auth_env"], "" if attempt == "codex" else None)
-        if key is None:
+        key = os.getenv(cfg["auth_env"])
+        if not key:
             continue  # no credential available for this provider
         try:
             r = requests.post(
@@ -159,7 +149,7 @@ if __name__ == "__main__":
             "remaining_paid_quota": max(0, DAILY_CAP - s["calls_today"]),
         }
         print(json.dumps(out, indent=2))
-    elif args[0] == "set" and len(args) == 2 and args[1] in ("auto", "codex", "gpt-5-nano", "free"):
+    elif args[0] == "set" and len(args) == 2 and args[1] in ("auto", "gpt-5-nano", "free"):
         s = _load_state()
         s["override"] = args[1]
         _save_state(s)

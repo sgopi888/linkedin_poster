@@ -55,21 +55,21 @@ ls ~/Hermes/linkedin-agent/drafts/                    # all draft IDs
 cat ~/Hermes/linkedin-agent/drafts/<id>/meta.json     # post text + status + image_path + provider used
 ```
 
-## Model chain (Codex subscription → nano → free)
+## Model chain (skill writer)
 
-The skill tries models in this order (auto mode):
-1. **Codex** (`gpt-5.5-codex` via your ChatGPT subscription, through `hermes proxy`) — free for you, primary path.
-2. **gpt-5-nano** (OpenAI direct API, paid) — fallback if Codex unavailable. Counts toward 200/day cap.
-3. **openrouter/auto** (free random model) — last resort, or when nano cap exhausted.
+The skill writer tries models in this order (auto mode):
+1. **gpt-5-nano** (OpenAI direct API, paid) — fast, primary. Counts toward 200/day cap.
+2. **openrouter/auto** (free random model) — fallback when nano errors, or after the daily cap.
 
 Empty completions or HTTP errors automatically advance to the next provider.
+
+> Note: Hermes' main brain (your Discord conversation partner) is separately configured to use Codex via your ChatGPT subscription (free, not counted here). Only the skill's text-writing step uses this paid path because `hermes proxy` doesn't support `openai-codex` upstream.
 
 User chat commands you should map to script calls:
 
 | User says | Run |
 |---|---|
-| "model status" / "what model" | `~/Hermes/linkedin-agent/venv/bin/python ~/Hermes/linkedin-agent/scripts/llm_budget.py status` |
-| "force codex" / "use codex" | `... llm_budget.py set codex` |
+| "model status" / "what model is the skill using" | `~/Hermes/linkedin-agent/venv/bin/python ~/Hermes/linkedin-agent/scripts/llm_budget.py status` |
 | "force nano" | `... llm_budget.py set gpt-5-nano` |
 | "force free" | `... llm_budget.py set free` |
 | "auto model" / "reset choice" | `... llm_budget.py set auto` |
