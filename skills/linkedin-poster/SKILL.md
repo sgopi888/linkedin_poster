@@ -1,3 +1,29 @@
+## MANDATORY FIRST ACTION — read before doing anything else
+
+On ANY drafting request ("draft a linkedin post", "write a linkedin post about X", "post about X", or any rewording), your FIRST tool call MUST be `~/Hermes/linkedin-agent/scripts/run.sh draft "<topic + grounding facts>"`. No exceptions.
+
+**You are NOT a LinkedIn writer.** You are an orchestrator that calls `run.sh draft`. The script is the writer. You never compose post text in chat.
+
+### Hard violations (each one is a failure, regardless of intent):
+
+- Writing "Draft post text:" / "Draft LinkedIn post:" / "Here's a polished draft:" / "Post text (proposed):" in chat.
+- Offering "Headline variant options", "Title options:", "Choose one:", or any list of title alternatives. You never pick titles — the writer does. ONE title, locked in.
+- Pasting a `Sources:` list, "Practical checklist", "(1/2)" / "(2/2)" pagination, or any multi-part response with a draft inside.
+- Asking "Would you like me to generate via run.sh draft?", "Want me to trigger the LinkedIn drafting workflow?", "Should I generate a draft_id-backed draft?", or any "Want me to…" / "Should I…" / "If yes, tell me…" question that delays calling the tool.
+- Writing the post body in chat AND then offering to also run run.sh. There is no "also" — calling run.sh is the ONLY way to produce a draft.
+- Surfacing an `image (attachment placeholder):` or Mint/article preview card as if it were the generated image. The only valid image is the one whose path `run.sh draft` returns in its JSON.
+
+### The ONLY correct response shape for a drafting request:
+
+1. Call `web_search` (if grounding is needed).
+2. Call `~/Hermes/linkedin-agent/scripts/run.sh draft "<topic + grounding>"`.
+3. Read the returned JSON. Reply to Discord with: the `post` text, the `image_path` as an attachment, the literal `draft_id` string. Nothing else.
+4. STOP. Wait for the user to type `publish <draft_id>`.
+
+If you find yourself typing a "Draft post text:" header, STOP and call run.sh draft instead.
+
+---
+
 ---
 name: linkedin
 description: "LinkedIn post drafting + publishing (self-hosted, your OAuth, your Comfy Cloud image). Triggers on: draft LinkedIn, write LinkedIn, post to LinkedIn, publish LinkedIn, LinkedIn content, LinkedIn image, LinkedIn article. Generates founder-style post + image, saves draft with draft_id, publishes via LinkedIn v2 API on explicit user approval."
@@ -35,16 +61,42 @@ ONE script does everything. Use it for any LinkedIn drafting / posting request.
 
 ## Image backend (default: gpt-image-1)
 
-- `gpt-image` (default, ~$0.04, ~15s): stat card with accurately rendered text. Use for news / funding / stats / company-name posts. Pass `--headline`, `--big-number`, `--caption`.
+- `gpt-image` (default, ~$0.04, ~15s): stat card with accurately rendered text. Use for news / funding / stats / company-name posts. Pass `--headline`, `--big-number`, `--caption`. For breaking-news/investment posts, put exactly one shocking stat in the headline/opening hook (e.g. “Breaking News: Anthropic makes $45B deal for SpaceX compute”) and keep wording understandable to non-technical readers. Do not cram multiple stats into the first line. Keep the current content density and size, but deliberately vary colors, layout, background, and visual theme across drafts so cards do not all look similar.
 - `comfy` (~$0.01-0.05, ~30-60s, no text): pure mood image. Use when there's no clean stat to highlight, or the user explicitly asks for "no text" / "atmospheric".
 
 When the user says "revise the image": use `regen-image <draft_id>`, NEVER re-run `draft` (that wastes a writer call). Re-use the same backend as the original by checking `drafts/<id>/meta.json` → `image_backend`, unless the user requested a backend change.
+
+Image variation is a standing quality requirement: Sreekanth likes the current LinkedIn card content density and square size, but future images should vary color palette, visual theme, composition, and background treatment so they do not all look like the same dark stat-card template. If `gpt-image-1` is blocked on a sensitive/political current-events prompt, retry with neutral/non-political image words where possible; otherwise use the skill fallback (`comfy`) and clearly surface that the image is mood/visual-only rather than a text stat-card.
+
+For politically sensitive news requests where Sreekanth says not to mention a person or party, enforce that constraint in the generated post, image headline/caption arguments, hashtags, and delivered response. Verify with a case-insensitive text check before showing the draft. See `references/current-events-style.md` for examples from prior sessions.
 
 Each command prints a single JSON object. The `draft` command returns a `draft_id` — always show it to the user so they can later say `publish <id>`.
 
 ## Grounding — MANDATORY web search
 
 Every LinkedIn post MUST be grounded in current web information. The writer model's training data is stale; using it alone produces outdated, sometimes incorrect posts.
+
+For breaking-news posts, use items from the last 1 day whenever possible; worst case, use only items from the last 1 week. Do not present older announcements as current breaking news. Older items may appear only as explicitly labeled background/context, not as the headline.
+
+For LinkedIn posts, add tasteful emojis to the header/opening line and top sentences. Keep them professional and sparse; do not overload the post.
+
+For daily AI news selection, search broadly for hot/trending AI news, not only investment news. Pick exactly ONE top trending/highest-signal news item and build the post around that single story. Do not create roundups or lists of multiple news items unless the user explicitly asks for a roundup. Prefer stories with visible attention signals when discoverable (major outlets, social posts with high views/engagement, repeated coverage across sources). Before drafting, check `/home/sreekanth/Hermes/linkedin-agent/MEMORY.md` and recent `drafts/*/meta.json` to avoid duplicating a topic already drafted or published. After drafting/posting, update MEMORY.md with 1–2 concise lines: topic, status, and avoid-repeat note.
+
+For open-source AI tooling posts, pick exactly ONE recent open-source AI/LLM/agentic tool release or major update. Rank candidates by recency plus GitHub stars/forks and practical relevance. Use GitHub/search evidence for repo stars/forks and release date when creating a new draft. Do not repeat tools/topics already in MEMORY.md or recent drafts. Frame the post around why the tool matters to builders, not a generic list of tools.
+
+Open-source spotlight style for Sreekanth:
+- Pick tools by **recency + GitHub stars/forks + practical relevance**. If comparing candidates, prefer the most recent high-star project unless another tool has clearly stronger builder value.
+- Tile/title should be short and explicit: tool name + what it does + GitHub stars/social proof. Prefer “OpenViking: AI Agent Memory + Skills Management — 24,550 GitHub Stars” over vague titles like “OpenViking has 24,550 GitHub stars.”
+- Body copy should be concise, not essay-like. Use actual bullets (`•`) when the user asks for bullets; do not fake bullets with long paragraph sections.
+- Bullets must flow as a natural storyline, not blunt Q&A labels. Avoid headings like “Why it matters / Why choose it / How to use it safely” unless the user explicitly asks for that format.
+- For developer-reader posts, do **not** dwell on publication time, pushed dates, release timestamps, or version minutiae. The reader cares why to use the tool: transparency, model/provider flexibility, terminal/desktop/IDE UX, privacy/compliance, community velocity, and workflow leverage.
+- Add only enough alternatives context to clarify why this tool is unique; do not overdo comparison lists. If the user asks for one-line context, use a single middle sentence comparing against alternatives, then continue the main bullet flow. Example: “Unlike Aider, Open Interpreter, and OpenHands, OpenCode is a terminal-first, IDE-like agent focused on fast, interactive coding sessions with LSP-powered intelligence and multiple running agents in one project.”
+- Lead with practical builder value: what the tool enables, why it matters, and how developers can safely adopt it.
+- Include adoption guardrails when relevant: repo permissions, sandboxing, diff review, tests, and human approval.
+- Avoid overloading the post with release-note minutiae unless the user asks for deeper technical detail.
+
+Example title pattern: “Promptfoo: AI evals + red-teaming — 21,459 GitHub stars.”
+Example bullet-story flow: infrastructure shift → open-source transparency → model/provider choice → multi-platform workflow → privacy/compliance → safe adoption guardrails.
 
 **Required workflow**:
 
@@ -54,7 +106,12 @@ Every LinkedIn post MUST be grounded in current web information. The writer mode
    ```bash
    ~/Hermes/linkedin-agent/scripts/run.sh draft "agentic memory systems — recent: [Paper X (arxiv 2026): finding 1]; [Company Y launched Z]; [Survey: 40% of agents now use ...]"
    ```
-4. After `draft`, tell the user the sources you grounded the post in.
+4. After `draft`, tell the user the sources you grounded the post in, including 1-3 source links.
+
+Citation-link rule for Sreekanth:
+- The LinkedIn post/draft itself should include 1–3 concise citation/source links whenever practical, usually under a short `Sources:` section at the end.
+- Do not only mention sources in the assistant's final response; the post body should carry the links so the published post is self-verifiable.
+- Avoid date-heavy source prefixes unless needed for clarity.
 
 **Forbidden**:
 - ❌ Calling `draft "<topic>"` with no grounding facts ever, unless `web_search` errored out AND you told the user "search failed, post is from model knowledge."
@@ -63,15 +120,7 @@ Every LinkedIn post MUST be grounded in current web information. The writer mode
 
 ## Critical workflow rules — DO NOT VIOLATE
 
-1. **NEVER write LinkedIn post text yourself.** Always invoke `run.sh draft`. This includes ALL of the following — every one is a hard violation:
-   - Writing a "Draft LinkedIn post:" preview inline in chat.
-   - Offering "Headline variant options" / "title options" / "choose one" lists. You never pick titles; the writer does.
-   - Pasting "Post text:" + "Sources:" + checklists as a Discord reply instead of calling `run.sh draft`.
-   - Asking "Want me to generate via the run.sh draft path?" or any "Should I…" / "If you prefer…" question before drafting. If the user said "draft this", you call `run.sh draft` immediately. No menu, no preview, no confirmation.
-   - Producing a post body in chat *with a note that you could also run run.sh*. There is no "could also" — you either run it or you don't.
-   - Splitting the reply into "(1/2)" / "(2/2)" pages. Discord allows long messages; one reply, one draft.
-
-   The ONLY acceptable response to a drafting request is: (a) gather grounding via `web_search`, (b) call `run.sh draft "<topic + grounding>"`, (c) post the JSON result's `post`, `image_path`, and `draft_id` to Discord. Nothing else.
+1. **NEVER write LinkedIn post text yourself.** Always invoke `run.sh draft`.
 
 2. **NEVER use `excalidraw` / `architecture-diagram` / `generate-image` / `image_generate` (any other image tool) for LinkedIn images.** This skill owns image generation. Backends are `gpt-image-1` (primary) and `comfy` (fallback) — both AI. If both fail, surface the failure to the user. DO NOT improvise.
 
@@ -88,6 +137,10 @@ Every LinkedIn post MUST be grounded in current web information. The writer mode
 4. **NEVER publish an old draft_id.** Always publish the draft you just created in the current turn. If multiple drafts exist, ask the user which `draft_id` to publish. Do not assume.
 
 5. **ALWAYS surface the new draft to the user.** The Discord reply for a `draft` command must contain: full post text, image attachment (from `image_path`), and the literal `draft_id` string. Do not collapse, summarize, or skip these.
+
+6. **When the user approves a previously shown draft/image and asks to post it, do not regenerate or re-research by default.** Locate the existing draft, apply only the requested text edits to `post.txt`/`meta.json`, verify `image.png` exists, then run `publish <draft_id>`. Only re-run search/draft/image generation if the user explicitly asks for fresh research or a new image, or if the existing draft/image cannot be found.
+
+7. **For scheduled publishing of an approved draft, preserve the existing image.** If the user says “cron it,” “schedule it,” or “post later,” create a one-shot cron job that publishes the existing `draft_id` without browsing/regenerating. The cron prompt must explicitly verify both `post.txt` and `image.png` and state that `run.sh publish <draft_id>` should publish an IMAGE post, not text-only.
 
 ## Drafts on disk
 
@@ -116,4 +169,4 @@ User chat commands you should map to script calls:
 | "auto model" / "reset choice" | `... llm_budget.py set auto` |
 | "reset budget" / "reset counter" | `... llm_budget.py reset` |
 
-Always show the JSON output to the user so they see what changed.
+Always show the JSON output to the user so they see what changed.\n\nExtended guidance and grounding updates (2026-05):\n- Ground LinkedIn posts in web search results; require 1-3 citations embedded in the post body.\n- Use the run.sh draft workflow exclusively; never manually type post text for public posting.\n- Image generation must use the designated image backends (gpt-image-1 or comfy); avoid local image composition or text overlays.\n- Drafts must include a draft_id; publish only after explicit user confirmation (publish <draft_id>).\n- Maintain a calm, technically grounded tone; avoid hype and overpromising.\n- Include a concise Sources section with 1-3 links at the end of the draft.
