@@ -16,11 +16,38 @@ On ANY drafting request ("draft a linkedin post", "write a linkedin post about X
 ### The ONLY correct response shape for a drafting request:
 
 1. Call `web_search` (if grounding is needed).
-2. Call `~/Hermes/linkedin-agent/scripts/run.sh draft "<topic + grounding>"`.
-3. Read the returned JSON. Reply to Discord with: the `post` text, the `image_path` as an attachment, the literal `draft_id` string. Nothing else.
-4. STOP. Wait for the user to type `publish <draft_id>`.
+2. Pick `--headline`, `--big-number`, `--caption` from the grounded data (see "Image card argument discipline" below).
+3. Call `~/Hermes/linkedin-agent/scripts/run.sh draft "<topic + grounding>" --headline "..." --big-number "..." --caption "..."`.
+4. Read the returned JSON. Reply to Discord with EXACTLY THIS AND NOTHING ELSE:
+   - the `post` field (the post body, verbatim)
+   - the `image_path` as an attachment
+   - one line: `Draft ID: <draft_id>`
+   - one line: `Reply with "publish <draft_id>" to publish.`
+5. STOP. Do NOT add: "What I did and why", "Would you like me to…", "Grounding sources", "Notes", "Further refine…", "(2/3) / (3/3)" pagination, or any explanation of your choices. The post body already contains the sources. The user can read it.
 
-If you find yourself typing a "Draft post text:" header, STOP and call run.sh draft instead.
+### Hermes-after-tool-call discipline (this is where you keep failing):
+
+After `run.sh draft` returns, you are DONE drafting. Do not:
+- Explain your reasoning ("I grounded the post in…", "I framed practical takeaways…").
+- Offer refinements ("Further refine the post to embed 1–3 source links", "tailor the focus to…").
+- Append a "Grounding sources" list — the post body already cites them inline.
+- Add a "Notes" section with conditional offers ("If you want…, I can…").
+- Break the reply into "(2/3)" / "(3/3)" pages.
+- Ask any question. The next user message will tell you what to do; until then, wait.
+
+The user wants ONE Discord reply: the post + image + draft_id + publish hint. That is THE END.
+
+If you find yourself typing "What I did", "Would you like me to", "Grounding sources", "Notes", or "(N/M)" — STOP, delete it, and re-send just the post + image + draft_id.
+
+### Image card argument discipline (for `--headline`, `--big-number`, `--caption`):
+
+The `--big-number` you pass is rendered LITERALLY on the image. The card has no narrator. If you write `72%`, the reader sees `72%` with no idea what it measures. Therefore:
+
+- `--big-number` MUST be a stat that ACTUALLY APPEARS in your grounded data. Do NOT invent or average numbers. If the data says "10,000 postings", "51% outside IT", "61% YoY growth" — pick ONE of those, not a made-up `72%`.
+- Format using AGENT_PROMPT.md number rules: uppercase suffixes (`10K`, `1.7M`, `45B`), `$` for money, `%` for percentages, `x` for multipliers. Never lowercase `m`/`k`/`b`.
+- The `--headline` (3-6 words) MUST make the big_number's unit obvious. Bad: headline "AI job trends 2025-2026" + big_number "72%" → 72% of what? Good: headline "GenAI jobs outside IT" + big_number "51%" → reader instantly knows.
+- The `--caption` MUST be a real source + date that maps to the big_number. Format: "Lightcast, May 2025" or "ILO 2025 update". NEVER use filler like "Grounded by the latest data" or "Multiple sources" — that's caption hallucination.
+- If you can't satisfy all three (headline anchors the unit, big_number is a real grounded stat, caption is its source), then there is no clean stat card for this topic. Pass `--image comfy` for a mood image instead — better no number than a meaningless one.
 
 ---
 
