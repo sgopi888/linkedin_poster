@@ -12,6 +12,7 @@ State schema:
     }
 """
 import os
+import sys
 import json
 import time
 import requests
@@ -129,6 +130,7 @@ def call_llm(prompt: str) -> tuple[str, str]:
             return text, attempt
         except Exception as e:
             last_err = e
+            print(f"[llm_budget] {attempt} failed: {e}", file=sys.stderr)
             continue
     raise RuntimeError(f"All providers failed. Last error: {last_err}")
 

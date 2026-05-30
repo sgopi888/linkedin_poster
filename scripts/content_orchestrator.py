@@ -186,8 +186,24 @@ RESEARCH (use specific facts, dates, names, numbers from this)
 """
 
 
+_PROMPT_FILE = Path(__file__).resolve().parent.parent / "AGENT_PROMPT.md"
+
+
+def load_prompt() -> str:
+    """Read AGENT_PROMPT.md fresh every call so edits are picked up without restart.
+
+    Falls back to the hardcoded WRITING_TEMPLATE if the file is missing, so the
+    pipeline keeps working even if the file is renamed or deleted.
+    """
+    try:
+        return _PROMPT_FILE.read_text()
+    except FileNotFoundError:
+        return WRITING_TEMPLATE
+
+
 def writing_agent(user_prompt, research):
-    post = _llm(WRITING_TEMPLATE.format(user_prompt=user_prompt, research=research))
+    template = load_prompt()
+    post = _llm(template.format(user_prompt=user_prompt, research=research))
     return clean_linkedin_text(post)
 
 
