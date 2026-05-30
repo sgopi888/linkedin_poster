@@ -128,14 +128,15 @@ leverage, utilize, facilitate, streamline, robust, seamless, delve, navigate, un
 
 A bold editorial LinkedIn news-card graphic, 1024x1024.
 
-Three text elements rendered as designed typography:
-- Top: short bold headline in white sans-serif, 3 to 6 words max: "{headline}"
-- Center: huge accent-colored number, dominant visual element: "{big_number}"
-- Bottom: small italic caption with source: "{caption}"
+EXACTLY three text elements rendered as designed typography. Do not add any other text, watermark, or label:
+
+- **Top**: short bold headline in white sans-serif, 3 to 6 words max: "{headline}"
+- **Center**: huge accent-colored number, the dominant visual element, rendered EXACTLY as: "{big_number}". Render this string LITERALLY, character by character. Do NOT prepend "+", "-", "~", or any other symbol that is not in the string. Do NOT abbreviate or reformat. If the string is "134%", render "134%" — not "+134%" or "-134%".
+- **Bottom**: short context tag in small white sans-serif, 2 to 4 words max, NOT italic: "{caption}". This is a unit-anchor (what the number measures), NOT a source citation.
 
 Visual direction for this draft: {visual_theme}
 
-Requirements: premium technology editorial design, crisp typography hierarchy, lots of negative space, abstract geometric accent shapes only (no people, no faces, no recognizable buildings or logos). Keep the same strong content density and square size, but make the color palette, background treatment, composition, and theme noticeably different from previous cards. No additional text beyond the three strings provided.
+Requirements: premium technology editorial design, crisp typography hierarchy, lots of negative space, abstract geometric accent shapes only (no people, no faces, no recognizable buildings or logos). Keep the same strong content density and square size, but make the color palette, background treatment, composition, and theme noticeably different from previous cards. No additional text beyond the three strings provided. No source URLs, no dates, no outlet names — sources live in the post body, not on the card.
 
 <!-- IMAGE:END -->
 
@@ -145,24 +146,41 @@ Requirements: premium technology editorial design, crisp typography hierarchy, l
 
 These are guidance for whoever fills `{big_number}` — gpt-image-1 renders the string literally.
 
-- Uppercase suffixes only: `K`, `M`, `B`, `T`. **Never lowercase `m`, `k`, `b`** — "3.9m" is ambiguous (million? meter? minute?). Always write `3.9M`.
+- The `{big_number}` MUST be a real stat that appears in the post body. Do NOT invent a number to fit the headline. If you can't find a single dominant stat in the post body, use `--image comfy` instead of the stat card.
+- Uppercase suffixes only: `K`, `M`, `B`, `T`. **Never lowercase `m`, `k`, `b`** — "3.9m" is ambiguous. Always write `3.9M`.
 - Include unit/symbol when meaning is unclear: `$3.9M`, `3.9M users`, `3.9M stars`. Bare `3.9M` only when headline + caption make the unit obvious.
 - Max 6 characters in `{big_number}` including symbol. Simplify if it doesn't fit (`$1.75T`, not `$1,750,000M`).
 - Percentages: `42%` not `42 percent`.
 - Multipliers: `4x` not `4X` or `×4`.
 - Counts under 1000: write in full (`847`, not `0.8K`).
+- **No sign decoration.** Never prepend `+` or `-` to make the number feel "growth" or "decline" — the headline + context tag carry direction. If the underlying stat is a literal negative number (e.g., a decline of 12%), write `-12%`; otherwise write the bare number.
+- **Coherence check (CRITICAL).** Headline direction and number direction must agree. If the headline says "slowdown", "decline", "drop", "cut", "freeze", the number must reflect a decrease (lower than baseline, or a negative). If the headline says "surge", "boom", "growth", the number must reflect growth. NEVER pair "AI hiring bucks slowdown" with `+134%` — that contradicts itself. If you can't find a stat whose direction matches the headline, either change the headline or change the stat. Don't ship contradictions.
 
 ## HEADLINE RULES (for the image card)
 
 - 3 to 6 words MAX. Hard cap.
 - No colons (the card already has a separate big number).
 - Active voice. Verb-led when possible.
+- Pick a verb whose direction matches the big_number's direction (see coherence check above).
 
-## CAPTION RULES
+## CONTEXT TAG RULES (replaces the old caption)
 
-- One short source line: outlet + date, OR company + report name.
-- Example: "Reuters, May 27 2026" / "Nvidia Q1 FY2027 earnings".
-- Keep under 10 words.
+The bottom line is a **unit-anchor**, not a source citation. It tells the reader what the big number measures.
+
+- 2 to 4 words MAX.
+- Says what the number is, not where it came from. The post body cites the source.
+- Examples (good):
+  - big_number `51%` → context tag `outside IT roles`
+  - big_number `$500M` → context tag `in 30 days`
+  - big_number `21,459` → context tag `GitHub stars`
+  - big_number `$45B` → context tag `compute deal`
+  - big_number `4.2%` → context tag `of US postings`
+- Examples (BAD — do not produce these):
+  - `Indeed, Jan 2026` (that's a citation, belongs in the post body)
+  - `According to PwC 2025` (citation)
+  - `Grounded by the latest data` (filler, says nothing)
+  - `Lightcast May 2025` (citation)
+- If you can't write a 2-4 word context tag that makes the big_number readable at a glance, the stat is too abstract for a card. Switch to `--image comfy`.
 
 ---
 

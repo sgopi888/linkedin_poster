@@ -41,13 +41,29 @@ If you find yourself typing "What I did", "Would you like me to", "Grounding sou
 
 ### Image card argument discipline (for `--headline`, `--big-number`, `--caption`):
 
-The `--big-number` you pass is rendered LITERALLY on the image. The card has no narrator. If you write `72%`, the reader sees `72%` with no idea what it measures. Therefore:
+The `--big-number` you pass is rendered LITERALLY on the image. The card has no narrator. Three rules:
 
-- `--big-number` MUST be a stat that ACTUALLY APPEARS in your grounded data. Do NOT invent or average numbers. If the data says "10,000 postings", "51% outside IT", "61% YoY growth" — pick ONE of those, not a made-up `72%`.
-- Format using AGENT_PROMPT.md number rules: uppercase suffixes (`10K`, `1.7M`, `45B`), `$` for money, `%` for percentages, `x` for multipliers. Never lowercase `m`/`k`/`b`.
-- The `--headline` (3-6 words) MUST make the big_number's unit obvious. Bad: headline "AI job trends 2025-2026" + big_number "72%" → 72% of what? Good: headline "GenAI jobs outside IT" + big_number "51%" → reader instantly knows.
-- The `--caption` MUST be a real source + date that maps to the big_number. Format: "Lightcast, May 2025" or "ILO 2025 update". NEVER use filler like "Grounded by the latest data" or "Multiple sources" — that's caption hallucination.
-- If you can't satisfy all three (headline anchors the unit, big_number is a real grounded stat, caption is its source), then there is no clean stat card for this topic. Pass `--image comfy` for a mood image instead — better no number than a meaningless one.
+**1. `--big-number` MUST be a real stat that appears in the post body.**
+Do NOT invent, round, or average numbers to fit a headline. If the post body's stats are "4.2%", "51%", "9x", "56%", "66%" — pick ONE of those for the card. Never a made-up `+134%` or `72%`.
+
+**2. `--big-number` direction MUST match `--headline` direction.** Coherence check before submitting:
+- Headline says "slowdown / decline / drop / cut / freeze / burn" → number must be a decrease, a negative, or a small/dropping figure.
+- Headline says "surge / boom / growth / jump" → number must be increasing.
+- Headline says "spent / cost / paid / blew" → number is the amount.
+- BAD: headline "AI hiring bucks slowdown" + big_number "+134%". The headline says hiring fell, the number says it grew. Contradiction. Reject and rewrite.
+- BAD: pre-pending `+` or `-` to a number to make it "feel" right. The post body's stat is the source of truth — copy it verbatim.
+
+**3. `--caption` is a CONTEXT TAG, not a source citation.**
+2 to 4 words. It says what the number measures. NEVER outlet+date.
+- Good: big_number `51%` + caption `outside IT roles`. big_number `$500M` + caption `in 30 days`. big_number `21,459` + caption `GitHub stars`.
+- BAD: caption `Lightcast May 2025`, `Indeed Jan 2026`, `Reuters, May 27 2026`. The post body cites sources; the card does NOT.
+- BAD: caption `Grounded by the latest data` or `Multiple sources`. That's filler. Reject.
+
+**4. Format the number string itself per AGENT_PROMPT.md rules**: uppercase suffixes (`10K`, `1.7M`, `45B`), `$` for money, `%` for percentages, `x` for multipliers. Never lowercase `m`/`k`/`b`. Max 6 chars including symbol.
+
+**5. If you can't satisfy 1+2+3 cleanly, switch to `--image comfy` for a mood image.** A meaningless or contradictory stat card hurts more than no stat card.
+
+The `--headline` (3-6 words) is the question; `--big-number` is the answer; `--caption` is the unit. All three together must form one coherent thought.
 
 ---
 
