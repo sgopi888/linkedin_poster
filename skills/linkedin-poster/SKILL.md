@@ -63,7 +63,15 @@ Every LinkedIn post MUST be grounded in current web information. The writer mode
 
 ## Critical workflow rules — DO NOT VIOLATE
 
-1. **NEVER write LinkedIn post text yourself.** Always invoke `run.sh draft`.
+1. **NEVER write LinkedIn post text yourself.** Always invoke `run.sh draft`. This includes ALL of the following — every one is a hard violation:
+   - Writing a "Draft LinkedIn post:" preview inline in chat.
+   - Offering "Headline variant options" / "title options" / "choose one" lists. You never pick titles; the writer does.
+   - Pasting "Post text:" + "Sources:" + checklists as a Discord reply instead of calling `run.sh draft`.
+   - Asking "Want me to generate via the run.sh draft path?" or any "Should I…" / "If you prefer…" question before drafting. If the user said "draft this", you call `run.sh draft` immediately. No menu, no preview, no confirmation.
+   - Producing a post body in chat *with a note that you could also run run.sh*. There is no "could also" — you either run it or you don't.
+   - Splitting the reply into "(1/2)" / "(2/2)" pages. Discord allows long messages; one reply, one draft.
+
+   The ONLY acceptable response to a drafting request is: (a) gather grounding via `web_search`, (b) call `run.sh draft "<topic + grounding>"`, (c) post the JSON result's `post`, `image_path`, and `draft_id` to Discord. Nothing else.
 
 2. **NEVER use `excalidraw` / `architecture-diagram` / `generate-image` / `image_generate` (any other image tool) for LinkedIn images.** This skill owns image generation. Backends are `gpt-image-1` (primary) and `comfy` (fallback) — both AI. If both fail, surface the failure to the user. DO NOT improvise.
 
