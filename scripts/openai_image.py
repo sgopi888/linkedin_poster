@@ -46,6 +46,24 @@ def _theme_for_draft(draft_id: str) -> str:
     return VISUAL_THEMES[digest[0] % len(VISUAL_THEMES)]
 
 
+_PROMPT_FILE = Path(__file__).resolve().parent.parent / "AGENT_PROMPT.md"
+
+
+def _load_image_prompt() -> str | None:
+    """Read the IMAGE section of AGENT_PROMPT.md fresh every call.
+    Returns None if file or markers missing; caller falls back to hardcoded template.
+    """
+    try:
+        content = _PROMPT_FILE.read_text()
+    except FileNotFoundError:
+        return None
+    start = "<!-- IMAGE:START -->"
+    end = "<!-- IMAGE:END -->"
+    if start not in content or end not in content:
+        return None
+    return content.split(start, 1)[1].split(end, 1)[0].strip()
+
+
 def generate_image_openai(
     draft_id: str,
     headline: str,
@@ -60,7 +78,8 @@ def generate_image_openai(
     if not OPENAI_API_KEY:
         raise RuntimeError("OPENAI_API_KEY not set — required for gpt-image-1")
 
-    prompt = STAT_CARD_PROMPT_TEMPLATE.format(
+    template = _load_image_prompt() or STAT_CARD_PROMPT_TEMPLATE
+    prompt = template.format(
         headline=headline.strip(),
         big_number=big_number.strip(),
         caption=caption.strip(),

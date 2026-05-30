@@ -1,15 +1,20 @@
 # LinkedIn Agent Prompt
 
-This file is the **single source of truth** for the writing agent's behaviour.
-Edit it freely, commit, push, and the next cron run on the server will pick it up.
-No code changes needed.
+Single source of truth for **both** the writing agent and the stat-card image agent.
 
-The pipeline reads this file at runtime via `load_prompt()` in `scripts/content_orchestrator.py`.
-Sections below are interpolated into the prompt sent to the LLM. The placeholders
-`{user_prompt}` and `{research}` are replaced at call time — keep them somewhere in
-this file or the writer will crash.
+Edit, commit, push. Next cron run on the server picks it up. No restart, no Python edits.
+
+The pipeline extracts two sections from this file by HTML-comment markers.
+**Do not delete the marker comment lines** (the four lines that begin with
+`(left-angle-bracket)!--` and contain `WRITING:START`, `WRITING:END`,
+`IMAGE:START`, `IMAGE:END`) — Python uses them to find each prompt block.
+
+Placeholders inside each block (`{user_prompt}`, `{research}`, `{headline}`,
+`{big_number}`, `{caption}`, `{visual_theme}`) are replaced at call time.
 
 ---
+
+<!-- WRITING:START -->
 
 ## ROLE
 
@@ -69,8 +74,6 @@ leverage, utilize, facilitate, streamline, robust, seamless, delve, navigate, un
 
 "In today's fast-paced world", "It's not just X, it's Y", anything in all caps.
 
----
-
 ## TOPIC
 
 {user_prompt}
@@ -78,3 +81,66 @@ leverage, utilize, facilitate, streamline, robust, seamless, delve, navigate, un
 ## RESEARCH (use specific facts, dates, names, numbers from this)
 
 {research}
+
+<!-- WRITING:END -->
+
+---
+
+<!-- IMAGE:START -->
+
+## STAT-CARD IMAGE PROMPT
+
+A bold editorial LinkedIn news-card graphic, 1024x1024.
+
+Three text elements rendered as designed typography:
+- Top: short bold headline in white sans-serif, 3 to 6 words max: "{headline}"
+- Center: huge accent-colored number, dominant visual element: "{big_number}"
+- Bottom: small italic caption with source: "{caption}"
+
+Visual direction for this draft: {visual_theme}
+
+Requirements: premium technology editorial design, crisp typography hierarchy, lots of negative space, abstract geometric accent shapes only (no people, no faces, no recognizable buildings or logos). Keep the same strong content density and square size, but make the color palette, background treatment, composition, and theme noticeably different from previous cards. No additional text beyond the three strings provided.
+
+<!-- IMAGE:END -->
+
+---
+
+## NUMBER FORMATTING RULES (apply BEFORE calling the image renderer)
+
+These are guidance for whoever fills `{big_number}` — gpt-image-1 renders the string literally.
+
+- Uppercase suffixes only: `K`, `M`, `B`, `T`. **Never lowercase `m`, `k`, `b`** — "3.9m" is ambiguous (million? meter? minute?). Always write `3.9M`.
+- Include unit/symbol when meaning is unclear: `$3.9M`, `3.9M users`, `3.9M stars`. Bare `3.9M` only when headline + caption make the unit obvious.
+- Max 6 characters in `{big_number}` including symbol. Simplify if it doesn't fit (`$1.75T`, not `$1,750,000M`).
+- Percentages: `42%` not `42 percent`.
+- Multipliers: `4x` not `4X` or `×4`.
+- Counts under 1000: write in full (`847`, not `0.8K`).
+
+## HEADLINE RULES (for the image card)
+
+- 3 to 6 words MAX. Hard cap.
+- No colons (the card already has a separate big number).
+- Active voice. Verb-led when possible.
+
+## CAPTION RULES
+
+- One short source line: outlet + date, OR company + report name.
+- Example: "Reuters, May 27 2026" / "Nvidia Q1 FY2027 earnings".
+- Keep under 10 words.
+
+---
+
+## VISUAL THEMES (image agent cycles by draft_id hash)
+
+Edit / reorder / add freely. The renderer hashes the draft_id and picks one.
+These themes live in code (`scripts/openai_image.py:VISUAL_THEMES`) — listed here
+for visibility. To actually change them, edit the Python list for now.
+
+1. midnight navy + electric cyan, circuit-line geometry, newsroom feel
+2. emerald-to-black gradient + warm gold, glass panels, finance-terminal aesthetic
+3. charcoal + magenta/violet neon, diagonal split, AI lab atmosphere
+4. off-black + burnt orange, radial spotlight, magazine-cover composition
+5. ice-blue + silver on frosted glass, enterprise research-note feel
+6. black-to-crimson + red alert, angular shapes, breaking-news urgency
+7. deep purple space-gradient + teal, data-orbit arcs, futuristic restrained
+8. matte graphite + lime-green terminal, developer-dashboard aesthetic

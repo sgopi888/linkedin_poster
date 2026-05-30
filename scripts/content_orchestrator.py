@@ -189,16 +189,27 @@ RESEARCH (use specific facts, dates, names, numbers from this)
 _PROMPT_FILE = Path(__file__).resolve().parent.parent / "AGENT_PROMPT.md"
 
 
-def load_prompt() -> str:
-    """Read AGENT_PROMPT.md fresh every call so edits are picked up without restart.
-
-    Falls back to the hardcoded WRITING_TEMPLATE if the file is missing, so the
-    pipeline keeps working even if the file is renamed or deleted.
+def load_prompt_section(marker: str) -> str | None:
+    """Return the text between <!-- {marker}:START --> and <!-- {marker}:END -->
+    in AGENT_PROMPT.md, or None if the file or markers are missing.
     """
     try:
-        return _PROMPT_FILE.read_text()
+        content = _PROMPT_FILE.read_text()
     except FileNotFoundError:
-        return WRITING_TEMPLATE
+        return None
+    start = f"<!-- {marker}:START -->"
+    end = f"<!-- {marker}:END -->"
+    if start not in content or end not in content:
+        return None
+    return content.split(start, 1)[1].split(end, 1)[0].strip()
+
+
+def load_prompt() -> str:
+    """Read the writing section of AGENT_PROMPT.md fresh every call.
+    Falls back to the hardcoded WRITING_TEMPLATE if file/markers missing.
+    """
+    section = load_prompt_section("WRITING")
+    return section if section else WRITING_TEMPLATE
 
 
 def writing_agent(user_prompt, research):
