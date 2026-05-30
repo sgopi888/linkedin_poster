@@ -9,6 +9,7 @@ import os
 import sys
 import re
 import base64
+import hashlib
 import requests
 from datetime import datetime
 from pathlib import Path
@@ -17,14 +18,32 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from config import OPENAI_API_KEY, OPENAI_IMAGE_MODEL, IMAGES_DIR, draft_dir
 
 
-STAT_CARD_PROMPT_TEMPLATE = """A bold news-ticker style editorial graphic, 1024x1024.
+STAT_CARD_PROMPT_TEMPLATE = """A bold editorial LinkedIn news-card graphic, 1024x1024.
 
 Three text elements rendered as designed typography:
 - Top: short bold headline in white sans-serif, 3 to 6 words max: "{headline}"
 - Center: huge accent-colored number, dominant visual element: "{big_number}"
-- Bottom: small italic gray caption with source: "{caption}"
+- Bottom: small italic caption with source: "{caption}"
 
-Layout: news-ticker / Bloomberg-card feel. Dark gradient background (deep navy to graphite). Subtle dot or grid texture. Lots of negative space. Abstract geometric accent shapes only (no people, no faces, no recognizable buildings or logos). Crisp typography hierarchy. No additional text beyond the three strings provided."""
+Visual direction for this draft: {visual_theme}
+
+Requirements: premium technology editorial design, crisp typography hierarchy, lots of negative space, abstract geometric accent shapes only (no people, no faces, no recognizable buildings or logos). Keep the same strong content density and square size, but make the color palette, background treatment, composition, and theme noticeably different from previous cards. No additional text beyond the three strings provided."""
+
+VISUAL_THEMES = [
+    "midnight navy background with electric cyan accents, thin circuit-line geometry, high-contrast newsroom feel",
+    "deep emerald-to-black gradient with warm gold accent number, subtle glass panels, premium finance-terminal aesthetic",
+    "charcoal background with magenta and violet neon accents, diagonal split layout, energetic AI lab atmosphere",
+    "warm off-black and burnt orange palette, soft radial spotlight, bold magazine-cover composition",
+    "ice-blue and silver palette on near-white frosted glass background, clean enterprise research-note feel",
+    "black-to-crimson gradient with red alert accents, sharp angular shapes, breaking-news urgency without clutter",
+    "deep purple space-gradient with teal highlights, abstract data-orbit arcs, futuristic but restrained",
+    "matte graphite background with lime-green terminal accents, minimal developer-tool dashboard aesthetic",
+]
+
+
+def _theme_for_draft(draft_id: str) -> str:
+    digest = hashlib.sha256(draft_id.encode("utf-8")).digest()
+    return VISUAL_THEMES[digest[0] % len(VISUAL_THEMES)]
 
 
 def generate_image_openai(
@@ -45,6 +64,7 @@ def generate_image_openai(
         headline=headline.strip(),
         big_number=big_number.strip(),
         caption=caption.strip(),
+        visual_theme=_theme_for_draft(draft_id),
     )
 
     r = requests.post(
