@@ -214,7 +214,12 @@ def load_prompt() -> str:
 
 def writing_agent(user_prompt, research):
     template = load_prompt()
-    post = _llm(template.format(user_prompt=user_prompt, research=research))
+    today = datetime.now().strftime("%A, %B %-d, %Y")
+    # Inject {today} if the template uses it; safe no-op otherwise.
+    try:
+        post = _llm(template.format(user_prompt=user_prompt, research=research, today=today))
+    except KeyError:
+        post = _llm(template.format(user_prompt=user_prompt, research=research))
     return clean_linkedin_text(post)
 
 
